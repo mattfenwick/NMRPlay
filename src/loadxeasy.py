@@ -43,9 +43,6 @@ def findCloseNHSQCPeaks():
                 print '\n'
 
 
-# findCloseNHSQCPeaks()
-
-
 def analyzeSpinSystems():
     proj = pt.json_in(ROOT + "project.txt")
     nhsqc, hnco = proj.spectra['nhsqc'], proj.spectra['hnco']
@@ -89,9 +86,6 @@ def analyzeSpinSystems():
     #   - what should I do with this data?
 
 
-# analyzeSpinSystems()
-
-
 def checkTags():
     proj = pt.json_in(ROOT + "project.txt")
     for (_, pk) in proj.spectra['hnco'].peaks.items():
@@ -99,8 +93,6 @@ def checkTags():
             print 'problem'
         else:
             print 'good', _
-
-# checkTags()
 
 
 def peakListOut():
@@ -111,9 +103,6 @@ def peakListOut():
     proj.spectra['nhsqc_bad'] = ut.filterSpecPeaks(lambda pk: 'backbone amide' not in pk.tags, nhsqc)
     
     pt.xeasy_out(proj, {'nhsqc_good': ROOT + "nhsqc_good.txt", 'nhsqc_bad': ROOT + "nhsqc_bad.txt"})
-
-
-peakListOut()
 
 
 def findJunkPeaksInSpinSystems():
@@ -135,9 +124,6 @@ def findJunkPeaksInSpinSystems():
         print key, '    ', val, '    ', hnco.peaks[key].tags, '    ', map(lambda x: x.shift, hnco.peaks[key].dims)
     
     
-# findJunkPeaksInSpinSystems()
-    
-    
 def addTag():
     proj = pt.json_in(ROOT + "project.txt")
     spec = proj.spectra['nhsqc']
@@ -148,9 +134,6 @@ def addTag():
         else:
             print _
     pt.json_out(ROOT + "new_project.txt", proj)
-
-
-# addTag()
 
 
 def buildSpinSystems():
@@ -209,3 +192,92 @@ def anImport():
                                       'hnco'  : ROOT + 'hnco.xez' , 
                                       'hncacb': ROOT + 'hncacb.xez'})
     pt.json_out(ROOT + 'new_project.txt', ba)
+    
+    
+def findNHSQCStrangenessAndAddHNCACBPeaksToSpinSystems():
+    proj = pt.json_in(ROOT + 'project.txt')
+    nhsqc, hncacb = proj.spectra['nhsqc'], proj.spectra['hncacb']
+    spins = proj.spinsystems
+    
+    nh_peaks = mod.fmap_dict(lambda _: [], nhsqc.peaks)
+    for (ssid, ss) in spins.items():
+        pks = []
+        for (spec, pkid) in ss.pkids:
+            if spec == 'nhsqc':
+                nh_peaks[pkid].append(ssid)
+                pks.append(pkid)
+        if len(pks) != 1:
+            print 'spin system', ssid, 'has weird peaks:', pks
+    
+    def action(xs):
+        if len(xs) != 1:
+            raise ValueError('assuming each NHSQC peak assigned to exactly 1 spin system')
+        return xs[0]
+    
+    # nhsqc_spins :: Map NHSQC_PK_ID SPIN_SYSTEM_ID
+    nhsqc_spins = mod.fmap_dict(action, nh_peaks)
+    
+    print nhsqc_spins
+    
+    HTOL, NTOL = 0.0125, 0.1 # make tolerances smaller b/c spectra are well-aligned
+    shf = lambda x: x.shift
+    
+    assert nhsqc.axes == ["N", "H"]
+    assert hncacb.axes == ["H", "N", "C"]
+    assnCnt = 0
+    
+    for (nid, npk) in nhsqc.peaks.items():
+        ss = spins[nhsqc_spins[nid]]
+        for (hid, hpk) in hncacb.peaks.items():
+            nhsqc_n, nhsqc_h = map(shf, npk.dims)
+            hncacb_h, hncacb_n, hncacb_c = map(shf, hpk.dims)
+            if abs(nhsqc_n - hncacb_n) <= NTOL and abs(nhsqc_h - hncacb_h) <= HTOL:
+                ss.pkids.append(['hncacb', hid])
+                assnCnt += 1
+                print 'assignment', assnCnt, "nhsqc id:", nid, "hncacb id:", hid
+                print npk
+                print hpk
+                print
+                
+    
+    pt.json_out(ROOT + "project_new2.txt", proj)
+
+
+def findHNCACBStrangeness():
+    proj = pt.json_in(ROOT + 'project.txt')
+    hncacb = proj.spectra['hncacb']
+    spins = proj.spinsystems
+    
+    hncacb_peaks = mod.fmap_dict(lambda _: [], hncacb.peaks)
+    
+    for (ssid, ss) in spins.items():
+        cnt = 0
+        for (spec, pkid) in ss.pkids:
+            if spec == 'hncacb':
+                cnt += 1
+                hncacb_peaks[pkid].append(ssid)
+        if cnt == 0:
+            print 'spin system', ssid, 'has 0 hncacb peaks'
+    
+    for (pid, ssids) in hncacb_peaks.items():
+        if hncacb.peaks[pid].tags != []:
+            continue
+        if len(ssids) != 1:
+            print 'hncacb peak', pid, 'in spin systems:', ssids
+        else:
+            print pid, 'is good to go' 
+    # HNCACB peaks in more or less than 1 spin system
+    # spin systems with 0 HNCACB peaks
+    # spin systems with lots of HNCACB peaks?  what's a good threshold?
+    
+
+
+# findCloseNHSQCPeaks()
+# peakListOut()
+# findJunkPeaksInSpinSystems()
+# addTag()
+# checkTags()
+# analyzeSpinSystems()
+# findNHSQCStrangenessAndAddHNCACBPeaksToSpinSystems()
+findHNCACBStrangeness()
+
