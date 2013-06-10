@@ -11,8 +11,8 @@ import patcher.util as ut
 import patcher.xeasyconverter as xc
 import patcher.nmrstarconverter as nc
 import patcher.loader as pl
-import nmrstar.parser as nsp
-import nmrstar.simple.unparser as unp
+import nmrpystar as nsp
+import nmrpystar.simple as unp
 import xeasy.unparser as xunp
 import json
 
