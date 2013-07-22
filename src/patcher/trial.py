@@ -61,7 +61,7 @@ def json_in(jsonpath):
 
 def json_out(jsonpath, proj):
     with open(jsonpath, 'w') as outfile:
-        outfile.write(json.dumps(proj.toJson()))
+        outfile.write(json.dumps(proj.toJson(), indent=2))
 
 
 def xez_to_star(paths, star):

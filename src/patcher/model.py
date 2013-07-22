@@ -13,6 +13,19 @@ def fmap_dict(f, dic):
     return dict((key, f(value)) for (key, value) in dic.iteritems())
 
 
+def joinSSToPeaks(prj):
+    ss = prj.spinsystems
+    peaks = []
+    for (name, spectrum) in prj.spectra.iteritems():
+        peaks.extend(spectrum.peaks)
+    joined = {}
+    for (ssid, spinsys) in ss.iteritems():
+        pks = [prj.spectra[pk_spectrum].peaks[pk_id] for (pk_spectrum, pk_id) in spinsys.pkids]
+        joined[ssid] = pks
+    return joined
+            
+
+
 def toJson(obj):
     if isinstance(obj, (int, float, basestring)):
         return obj
@@ -101,7 +114,7 @@ class SpinSystem(MyBase):
        assigned instead?  I can't answer until I actually get this far.
     '''
     
-    def __init__(self, pkids, aatypes, residueids, ssnexts):
+    def __init__(self, pkids, aatypes, residueids, ssnexts, tags):
         for pkid in pkids:
             if not isinstance(pkid, list):
                 raise TypeError(('peak id', pkid))
@@ -121,6 +134,7 @@ class SpinSystem(MyBase):
             if not isinstance(ssid, int):
                 raise TypeError(('spin system id', ssid))
         self.ssnexts = ssnexts
+        self.tags = tags
         
         
 class Project(MyBase):

@@ -1,8 +1,3 @@
-'''
-Created on May 9, 2013
-
-@author: mattf
-'''
 import patcher.model as mod
 
 
@@ -18,7 +13,8 @@ def loadPeak(pk):
 
     
 def loadSpectrum(spec):
-    return mod.Spectrum(spec['axes'], dict((int(pkid), loadPeak(pk)) for (pkid, pk) in spec['peaks'].items()))
+    return mod.Spectrum(spec['axes'], 
+                        dict((int(pkid), loadPeak(pk)) for (pkid, pk) in spec['peaks'].items()))
 
 
 def loadMolecule(mol):
@@ -26,12 +22,16 @@ def loadMolecule(mol):
 
 
 def loadSpinSystem(ss):
-    return mod.SpinSystem(ss['pkids'], ss['aatypes'], ss['residueids'], ss['ssnexts'])
+    return mod.SpinSystem(ss['pkids'], 
+                          ss['aatypes'], 
+                          ss['residueids'], 
+                          ss['ssnexts'], 
+                          ss['tags'])
 
 
 def loadProject(prj):
     '''
-    Convert a primitive object graph -- composed dicts, lists, etc., 
+    Convert a primitive object graph -- composed of dicts, lists, etc., 
     which are presumably from JSON -- to patcher model.
     '''
     return mod.Project(prj['name'], 

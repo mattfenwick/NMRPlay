@@ -272,12 +272,13 @@ def findHNCACBStrangeness():
     
 
 
-# findCloseNHSQCPeaks()
-# peakListOut()
-# findJunkPeaksInSpinSystems()
-# addTag()
-# checkTags()
-# analyzeSpinSystems()
-# findNHSQCStrangenessAndAddHNCACBPeaksToSpinSystems()
-findHNCACBStrangeness()
+if __name__ == "__main__":
+    # findCloseNHSQCPeaks()
+    # peakListOut()
+    # findJunkPeaksInSpinSystems()
+    # addTag()
+    # checkTags()
+    # analyzeSpinSystems()
+    # findNHSQCStrangenessAndAddHNCACBPeaksToSpinSystems()
+    findHNCACBStrangeness()
 
