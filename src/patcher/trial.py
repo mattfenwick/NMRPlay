@@ -12,7 +12,6 @@ import patcher.xeasyconverter as xc
 import patcher.nmrstarconverter as nc
 import patcher.loader as pl
 import nmrpystar as nsp
-import nmrpystar.simple as unp
 import xeasy.unparser as xunp
 import json
 
@@ -50,6 +49,7 @@ def star_in(starpath):
     return nc.star2patch(star.value['result'])
 
 def star_out(pmodel, starpath):
+    raise ImportError('missing unparsing module for nmr-star serialization')
     text = unp.unparse(nc.patch2star(pmodel))
     with open(starpath, 'w') as outfile:
         outfile.write(text)

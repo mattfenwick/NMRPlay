@@ -1,5 +1,5 @@
 import patcher.model as pmod
-import nmrpystar.model as nmod
+import nmrpystar.ast as nmod
 
 
 fmap_dict = pmod.fmap_dict
