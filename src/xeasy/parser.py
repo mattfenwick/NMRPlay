@@ -1,70 +1,74 @@
-'''
-Created on Apr 22, 2013
-
-@author: mattf
-'''
-from parse.standard import Parser
+from unparse import combinators as c
+from unparse import conslist
 import xeasy.model as m
 
 
-def _literal(c):
-    return Parser.satisfy(lambda x: x.char == c)
-
-def _string(cs):
-    return Parser.all(map(_literal, cs))
+item = c.itemPosition
+literal, satisfy, not1, string = c.tokenPosition
 
 def _oneOf(cs):
     chars = set(cs)
-    return Parser.satisfy(lambda x: x.char in chars)
+    return satisfy(lambda x: x in chars)
 
-_dig         = _oneOf('0123456789').fmap(lambda x: x.char)
-_digit       = _dig.fmap(int)
-_int         = _dig.many1().fmap(lambda xs: ''.join(xs))
-_integer     = _int.fmap(int)
-_float       = Parser.app(lambda a, b, c: float(''.join([a, '.', c])), _int, _literal('.'), _int)
+_dig         = _oneOf('0123456789')
+_digit       = c.fmap(int, _dig)
+_int         = c.fmap(''.join, c.many1(_dig))
+_integer     = c.fmap(int, _int)
+_float       = c.app(lambda d, e, f: float(''.join([d, '.', f])), 
+                     _int, 
+                     literal('.'), 
+                     _int)
 
 _newline     = _oneOf('\n\r\f')
 _space       = _oneOf(' \t')
 
 
-line1 = _string('# Number of dimensions ').seq2R(_digit).seq2L(_newline)
+line1 = c.app(lambda x, y, z: y, 
+              string('# Number of dimensions '), 
+              _digit, 
+              _newline)
 
 
 # the dim numbers are ignored; they're assumed
 # to be the integers 1..n, in order and without
 # any skipping
-def dimAction(_1, _4, _2, dimName, _3):
-    return dimName.char
-
-dim = Parser.app(dimAction, _string('# INAME '), _digit, _space, Parser.item, _newline)
+dim = c.app(lambda _1, _2, _3, i, _4: i, 
+            string('# INAME '), 
+            _digit, 
+            _space, 
+            item, 
+            _newline)
 
 def dims(n):
-    return Parser.all([dim] * n)
+    return c.all_([dim] * n)
 
 
 # what's the spec say about leading whitespace -- is it optional or required?
-_ws_integer = _space.many0().seq2R(_integer)
-_ws_float   = _space.many1().seq2R(_float)
-_ws_field   = _space.many1().seq2R(_newline.plus(_space).not1().many1())
+_ws_integer = c.seq2R(c.many0(_space), _integer)
+_ws_float   = c.seq2R(c.many1(_space), _float)
+_ws_field   = c.seq2R(c.many1(_space), c.many1(not1(c.plus(_newline, _space))))
 
 def peakline(n):
-    return Parser.app(lambda ident, shifts, _fields1, height, _fields2, _newl: (ident, m.Peak(shifts, float(height))), 
-                      _ws_integer,
-                      Parser.all([_ws_float] * n).commit('a'),
-                      Parser.all([_ws_field] * 2),
-                      _ws_field.fmap(lambda x: ''.join([y.char for y in x])),
-                      _ws_field.many0(), 
-                      _newline)
+    return c.app(lambda ident, shifts, _fields1, height, _fields2, _newl: (ident, m.Peak(shifts, float(height))), 
+                 _ws_integer,
+                 c.commit('a', c.all_([_ws_float] * n)),
+                 c.all_([_ws_field] * 2),
+                 c.fmap(''.join, _ws_field),
+                 c.many0(_ws_field), 
+                 _newline)
 
 
 def xeasyAction(dims, peaks):
     return m.PeakFile.fromSimple(dims, peaks)
 
-def endCheck(p):
-    def action(rest):
-        if rest.isEmpty(): 
-            return Parser.pure(None)
-        return Parser.error({'message': 'unparsed input remaining', 'position': rest.first()})
-    return p.seq2L(Parser.get.bind(action))
+endCheck = c.bind(c.getState, 
+                  lambda p: c.not0(c.seq2L(item, c.error(('unparsed input remaining', p)))))
 
-xeasy = endCheck(line1.bind(lambda n: Parser.app(xeasyAction, dims(n), peakline(n).many0())))
+xeasy = c.seq2L(c.bind(line1, 
+                       lambda n: c.app(xeasyAction, 
+                                       dims(n), 
+                                       c.many0(peakline(n)))),
+                endCheck)
+
+def run(parser, inp):
+    return parser.parse(conslist.ConsList.fromIterable(inp), (1, 1))
