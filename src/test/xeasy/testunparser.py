@@ -1,5 +1,5 @@
-import xeasy.model as m
-import xeasy.unparser as unp
+from ...xeasy import model as m
+from ...xeasy import unparser as unp
 import unittest as u
 
 

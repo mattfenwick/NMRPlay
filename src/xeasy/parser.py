@@ -1,6 +1,6 @@
 from unparse import combinators as c
 from unparse import conslist
-import xeasy.model as m
+from . import model
 
 
 item = c.itemPosition
@@ -49,7 +49,7 @@ _ws_float   = c.seq2R(c.many1(_space), _float)
 _ws_field   = c.seq2R(c.many1(_space), c.many1(not1(c.plus(_newline, _space))))
 
 def peakline(n):
-    return c.app(lambda ident, shifts, _fields1, height, _fields2, _newl: (ident, m.Peak(shifts, float(height))), 
+    return c.app(lambda ident, shifts, _fields1, height, _fields2, _newl: (ident, model.Peak(shifts, float(height))), 
                  _ws_integer,
                  c.commit('a', c.all_([_ws_float] * n)),
                  c.all_([_ws_field] * 2),
@@ -59,7 +59,7 @@ def peakline(n):
 
 
 def xeasyAction(dims, peaks):
-    return m.PeakFile.fromSimple(dims, peaks)
+    return model.PeakFile.fromSimple(dims, peaks)
 
 endCheck = c.bind(c.getState, 
                   lambda p: c.not0(c.seq2L(item, c.error(('unparsed input remaining', p)))))

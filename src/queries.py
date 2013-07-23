@@ -1,11 +1,6 @@
-'''
-Created on May 9, 2013
-
-@author: mattf
-'''
-import patcher.trial as pt
-import patcher.model as mod
-import patcher.util as ut
+from .patcher import inout as pt
+from .patcher import model
+from operator import attrgetter
 
 
 loadProject = pt.json_in
@@ -13,7 +8,32 @@ loadProject = pt.json_in
 ROOT = '../../PeakPick/'
 
 
+def filterSpecPeaks(pred, spec):
+    '''
+    Filter peaks from a spectrum based on a predicate,
+    returning a new spectrum.
+    '''
+    peaks = dict([(pkid, pk) for (pkid, pk) in spec.peaks.iteritems() if pred(pk)]) # filter(pred, spec.peaks)
+    return model.Spectrum(spec.axes, peaks)
+
+
+def joinSSToPeaks(prj):
+    ss = prj.spinsystems
+    peaks = []
+    for (name, spectrum) in prj.spectra.iteritems():
+        peaks.extend(spectrum.peaks)
+    joined = {}
+    for (ssid, spinsys) in ss.iteritems():
+        pks = [prj.spectra[pk_spectrum].peaks[pk_id] for (pk_spectrum, pk_id) in spinsys.pkids]
+        joined[ssid] = pks
+    return joined
+            
+
+
 def findSpinsystemsOfPeak(spins, spec, pid):
+    """
+    Map Int SpinSystem -> String -> Int -> [Int]
+    """
     ss_ids = []
     for (ssid, ss) in spins.items():
         for pkid in ss.pkids:
@@ -22,9 +42,11 @@ def findSpinsystemsOfPeak(spins, spec, pid):
     return ss_ids
 
 
-def findCloseNHSQCPeaks():
+def findCloseNHSQCPeaks(proj, HTOL=0.025, NTOL=0.2):
+    """
+    Project -> [((Int, Peak, [SpinSystem]), (Int, Peak, [SpinSystem]))]
+    """
     HTOL, NTOL = 0.025, 0.2
-    proj = pt.json_in(ROOT + "project.txt")
     nhsqc = proj.spectra['nhsqc']
     spins = proj.spinsystems
     
@@ -43,8 +65,10 @@ def findCloseNHSQCPeaks():
                 print '\n'
 
 
-def analyzeSpinSystems():
-    proj = pt.json_in(ROOT + "project.txt")
+def analyzeSpinSystems(proj):
+    """
+    Project -> ([(SpinSystemID, [Float], [(Int, String)])], Map Int Int)
+    """
     nhsqc, hnco = proj.spectra['nhsqc'], proj.spectra['hnco']
     spins = proj.spinsystems
     
@@ -60,11 +84,6 @@ def analyzeSpinSystems():
     # 2. find ??? HNCO peaks -- member of < or > 1 spin system
     #   - get list of HNCO peak ids
     #   - look through all spin systems, and total up the hnco peak ids in each
-#    hncoids = mod.fmap_dict(lambda _: 0, hnco.peaks)
-#    for (ssid, ss) in spins.items():
-#        for (spec, pid) in ss.pkids:
-#            if spec == 'hnco':
-#                hncoids[pid] += 1
     hncoids = dict((pkid, 0) for (pkid, pk) in hnco.peaks.items() if 'backbone amide' in pk.tags)
     for (ssid, ss) in spins.items():
         for (spec, pid) in ss.pkids:
@@ -76,18 +95,14 @@ def analyzeSpinSystems():
         else:
             print key, 'is boring'
     
-#    for (pkid, pk) in hnco.peaks.items():
-#        if 'processing artifact' in pk.tags:
-#            print 'artifact', pkid
-#        else:
-#            print pkid, 'NOT'
-    
     # 3. find HSQC peaks close (i.e. within tolerances) of other HSQC peaks
     #   - what should I do with this data?
 
 
-def checkTags():
-    proj = pt.json_in(ROOT + "project.txt")
+def checkTags(proj):
+    """
+    Project -> [(String, PeakID)]
+    """
     for (_, pk) in proj.spectra['hnco'].peaks.items():
         if len(pk.tags) != 1:
             print 'problem'
@@ -95,26 +110,28 @@ def checkTags():
             print 'good', _
 
 
-def peakListOut():
-    proj = pt.json_in(ROOT + "project.txt")
+def peakListOut(proj):
+    """
+    Project -> IO ()
+    """
     nhsqc = proj.spectra['nhsqc']
     
-    proj.spectra['nhsqc_good'] = ut.filterSpecPeaks(lambda pk: 'backbone amide' in pk.tags, nhsqc)
-    proj.spectra['nhsqc_bad'] = ut.filterSpecPeaks(lambda pk: 'backbone amide' not in pk.tags, nhsqc)
+    proj.spectra['nhsqc_good'] = filterSpecPeaks(lambda pk: 'backbone amide' in pk.tags, nhsqc)
+    proj.spectra['nhsqc_bad'] = filterSpecPeaks(lambda pk: 'backbone amide' not in pk.tags, nhsqc)
     
     pt.xeasy_out(proj, {'nhsqc_good': ROOT + "nhsqc_good.txt", 'nhsqc_bad': ROOT + "nhsqc_bad.txt"})
 
 
-def findJunkPeaksInSpinSystems():
-    proj = pt.json_in(ROOT + "project.txt")
+def findJunkPeaksInSpinSystems(proj):
+    """
+    Project -> ([(Int, Int, [String])], [(String, String, [String], [Float])])
+    """
     hnco = proj.spectra['hnco']
-    pks = ut.filterSpecPeaks(lambda pk: pk.tags != ['backbone amide'], hnco).peaks
+    pks = filterSpecPeaks(lambda pk: pk.tags != ['backbone amide'], hnco).peaks
     for (ssid, ss) in proj.spinsystems.items():
         for (spec, pkid) in ss.pkids:
             if spec == 'hnco' and pkid in pks:
                 print 'uh-oh, problem with ', pkid, 'in spin system', ssid, 'with tags', pks[pkid].tags
-#    for (pid, pk) in pks.items():
-#        print pid, map(lambda x: x.shift, pk.dims), pk.tags
     hncoids = dict((pkid, []) for (pkid, pk) in hnco.peaks.items())
     for (ssid, ss) in proj.spinsystems.items():
         for (spec, pid) in ss.pkids:
@@ -124,8 +141,10 @@ def findJunkPeaksInSpinSystems():
         print key, '    ', val, '    ', hnco.peaks[key].tags, '    ', map(lambda x: x.shift, hnco.peaks[key].dims)
     
     
-def addTag():
-    proj = pt.json_in(ROOT + "project.txt")
+def addTag(proj):
+    """
+    Project -> IO Project
+    """
     spec = proj.spectra['nhsqc']
     for (_, pk) in spec.peaks.items():
         if len(pk.tags) == 0:
@@ -136,18 +155,20 @@ def addTag():
     pt.json_out(ROOT + "new_project.txt", proj)
 
 
-def buildSpinSystems():
-    proj = pt.json_in(ROOT + "project.txt")
+def buildSpinSystems(proj, HTOL=0.025, NTOL=0.2):
+    """
+    Project -> IO Project
+    builds spin systems along the way based on matching
+    """
     nhsqc, hnco = proj.spectra['nhsqc'], proj.spectra['hnco']
     
-    HTOL, NTOL = 0.025, 0.2
-    shf = lambda x: x.shift
+    shf = attrgetter('shift')
     ssid = 1
     
     print hnco.axes, nhsqc.axes
                 
     for (nid, npk) in nhsqc.peaks.items():
-        ss = mod.SpinSystem([['nhsqc', nid]], [], [], [])
+        ss = model.SpinSystem([['nhsqc', nid]], [], [], [])
         print 'ssid:', ssid
         for (hid, hpk) in hnco.peaks.items():
             nhsqc_n, nhsqc_h = map(shf, npk.dims)
@@ -161,16 +182,21 @@ def buildSpinSystems():
     pt.json_out(ROOT + "project_new.txt", proj)
 
 
-def dumpHncacb():
-    proj = pt.json_in(ROOT + "project.txt")
-
+def dumpHncacb(proj):
+    """
+    Project -> IO Spectrum
+    """
     spec = proj.spectra['hncacb']
     pks = dict(filter(lambda (pid, pk): len(pk.tags) == 0, spec.peaks.items()))
-    pt.xeasy_out(mod.Project('name', {'hncacb': mod.Spectrum(spec.axes, pks)}, proj.molecule, proj.spinsystems), {'hncacb': ROOT + 'hncacb_oops.txt'})
+    pt.xeasy_out(model.Project('name', 
+                             {'hncacb': model.Spectrum(spec.axes, pks)}, 
+                             proj.molecule, proj.spinsystems), {'hncacb': ROOT + 'hncacb_oops.txt'})
 
 
-def addTags():
-    proj = pt.json_in(ROOT + 'project.txt')
+def addTags(proj):
+    """
+    Project -> IO Project
+    """
     hncacb = pt.xeasy_in("temp", {'hncacb': ROOT + 'hncacb.xez'}).spectra['hncacb']
 
     print proj.spectra['hncacb'] == hncacb
@@ -187,6 +213,9 @@ def addTags():
 
 
 def anImport():
+    """
+    () -> IO Project
+    """
     # ba = pt.xeasy_in('mynameismatt', {'nhsqc': 'nhsqc.xez', 'hnco': 'hnco.xez'})
     ba = pt.xeasy_in('mynameismatt', {'nhsqc' : ROOT + 'nhsqc.xez', 
                                       'hnco'  : ROOT + 'hnco.xez' , 
@@ -194,12 +223,14 @@ def anImport():
     pt.json_out(ROOT + 'new_project.txt', ba)
     
     
-def findNHSQCStrangenessAndAddHNCACBPeaksToSpinSystems():
-    proj = pt.json_in(ROOT + 'project.txt')
+def findNHSQCStrangenessAndAddHNCACBPeaksToSpinSystems(proj):
+    """
+    Project -> ???
+    """
     nhsqc, hncacb = proj.spectra['nhsqc'], proj.spectra['hncacb']
     spins = proj.spinsystems
     
-    nh_peaks = mod.fmap_dict(lambda _: [], nhsqc.peaks)
+    nh_peaks = model.fmap_dict(lambda _: [], nhsqc.peaks)
     for (ssid, ss) in spins.items():
         pks = []
         for (spec, pkid) in ss.pkids:
@@ -215,7 +246,7 @@ def findNHSQCStrangenessAndAddHNCACBPeaksToSpinSystems():
         return xs[0]
     
     # nhsqc_spins :: Map NHSQC_PK_ID SPIN_SYSTEM_ID
-    nhsqc_spins = mod.fmap_dict(action, nh_peaks)
+    nhsqc_spins = model.fmap_dict(action, nh_peaks)
     
     print nhsqc_spins
     
@@ -239,16 +270,17 @@ def findNHSQCStrangenessAndAddHNCACBPeaksToSpinSystems():
                 print hpk
                 print
                 
-    
     pt.json_out(ROOT + "project_new2.txt", proj)
 
 
-def findHNCACBStrangeness():
-    proj = pt.json_in(ROOT + 'project.txt')
+def findHNCACBStrangeness(proj):
+    """
+    Project -> ([Int], [(Int, [Int])])
+    """
     hncacb = proj.spectra['hncacb']
     spins = proj.spinsystems
     
-    hncacb_peaks = mod.fmap_dict(lambda _: [], hncacb.peaks)
+    hncacb_peaks = model.fmap_dict(lambda _: [], hncacb.peaks)
     
     for (ssid, ss) in spins.items():
         cnt = 0

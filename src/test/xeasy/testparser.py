@@ -1,13 +1,8 @@
-'''
-Created on Apr 29, 2013
-
-@author: mattf
-'''
-import xeasy.parser as p
+from ...xeasy import parser as p
+from ...xeasy import model as mod
 import unparse.maybeerror as me
 import unparse.conslist as c
 import unittest as u
-import xeasy.model as mod
 
 
 m = me.MaybeError

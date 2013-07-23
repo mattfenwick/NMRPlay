@@ -1,5 +1,5 @@
-import patcher.model as pmod
-import xeasy.model as xmod
+from . import model as pmod
+from ..xeasy import model as xmod
 
 
 fmap_dict = pmod.fmap_dict

@@ -1,8 +1,3 @@
-'''
-Created on Apr 29, 2013
-
-@author: mattf
-'''
 
 
 def fmap_dict(f, dic):
@@ -11,19 +6,6 @@ def fmap_dict(f, dic):
     dictionary with the same size and same keys.
     '''
     return dict((key, f(value)) for (key, value) in dic.iteritems())
-
-
-def joinSSToPeaks(prj):
-    ss = prj.spinsystems
-    peaks = []
-    for (name, spectrum) in prj.spectra.iteritems():
-        peaks.extend(spectrum.peaks)
-    joined = {}
-    for (ssid, spinsys) in ss.iteritems():
-        pks = [prj.spectra[pk_spectrum].peaks[pk_id] for (pk_spectrum, pk_id) in spinsys.pkids]
-        joined[ssid] = pks
-    return joined
-            
 
 
 def toJson(obj):
