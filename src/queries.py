@@ -1,5 +1,5 @@
-from .patcher import inout as pt
-from .patcher import model
+from . import inout as pt
+from . import model
 from operator import attrgetter
 
 

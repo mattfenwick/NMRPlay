@@ -26,7 +26,7 @@ def loadSpinSystem(ss):
 def loadProject(prj):
     '''
     Convert a primitive object graph -- composed of dicts, lists, etc., 
-    which are presumably from JSON -- to patcher model.
+    which are presumably from JSON -- to the model.
     '''
     return model.Project(prj['name'], 
                          fmap_dict(loadSpectrum, prj['spectra']), 
