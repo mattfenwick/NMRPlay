@@ -1,6 +1,6 @@
 import json
-from ..xeasy import parser
-from ..xeasy import unparser
+from .xeasy import parser
+from .xeasy import unparser
 from . import xeasyconverter
 from . import fromjson
 
