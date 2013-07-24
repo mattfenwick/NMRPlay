@@ -1,82 +1,82 @@
 from . import inout as pt
 from . import model
-from .algebra import ffilter, inner_join
+from .algebra import ffilter, inner_join, groupBy
+from .querymodel import fromModel # bring this into scope b/c it seems convenient ... or something
 from operator import attrgetter
 
 
-ROOT = '../../PeakPicker/'
+ROOT = '../PeakPicker/'
 
 def getData(root=ROOT):
-    return pt.json_in(root + 'project.txt')
+    return fromModel(pt.json_in(root + 'project.txt'))
 
+def fst(x):
+    return x[0]
 
-def filterSpecPeaks(pred, spec):
-    '''
-    Filter peaks from a spectrum based on a predicate,
-    returning a new spectrum.
-    '''
-    peaks = ffilter(pred, spec.peaks)
-    return model.Spectrum(spec.axes, peaks)
+def snd(x):
+    return x[1]
 
 
 def getAllPeaks(prj):
     """
-    Project -> [(String, Int, Peak)]
+    Project -> [Peak]
     """
     peaks = []
-    for (name, spectrum) in prj.spectra.iteritems():
-        peaks.extend([(name, pkid, pk) for (pkid, pk) in spectrum.peaks.iteritems()])
+    for spectrum in prj.getSpectra():
+        peaks.extend(spectrum.getPeaks())
     return peaks
 
 
 def joinSSToPeaks(prj):
-    joined, ss = {}, prj.spinsystems
-    for (ssid, spinsys) in ss.iteritems():
-        pks = [prj.spectra[pk_spectrum].peaks[pk_id] for (pk_spectrum, pk_id) in spinsys.pkids]
-        joined[ssid] = pks
+    """
+    Project -> [(SpinSystem, [Peak])]
+    """
+    joined, spins = [], prj.getSpinSystems()
+    for ss in spins:
+        pks = [prj._spectra[spec]._peaks[pk_id] for (spec, pk_id) in ss.pkids]
+        joined.append((ss, pks))
     return joined
 
-def joined2(prj):
+def joined2(spins, peaks):
     """
-    Project -> [(Int, SpinSystem, [(Int, Peak)])]
+    [SpinSystem] -> [Peak] -> [(SpinSystem, Peak)]
+    
+    this is nearly identical to 'joinSSToPeaks' except for the lack of grouping
     """
-    peaks = getAllPeaks(prj)
     def p(ss, pk):
-        return list(pk[:2]) in ss[1].pkids
-    joined = inner_join(p, prj.spinsystems.iteritems(), peaks)
+        return [pk.spectrum_name, pk.id] in ss.pkids
+    joined = inner_join(p, spins, peaks)
     return joined
 
 
-def findSpinsystemsOfPeak(spins, spec, pid):
+def findSpinsystemsOfPeak(spins, peak):
     """
-    Map Int SpinSystem -> String -> Int -> [Int]
+    [SpinSystem] -> Peak -> [Int]
     """
-    ss_ids = []
-    for (ssid, ss) in spins.items():
-        if [spec, pid] in ss.pkids:
-            ss_ids.append(ssid)
-    return ss_ids
+    return filter(lambda ss: [peak.spectrum_name, peak.id] in ss.pkids, spins)
 
 
 def findCloseNHSQCPeaks(proj, HTOL=0.025, NTOL=0.2):
     """
-    Project -> [((Int, Peak, [SpinSystem]), (Int, Peak, [SpinSystem]))]
+    Project -> [((Peak, [SpinSystem]), (Peak, [SpinSystem]))]
     """
-    nhsqc = proj.spectra['nhsqc']
-    spins = proj.spinsystems
+    nhsqc = proj._spectra['nhsqc']
+    spins = proj.getSpinSystems()
     
     if nhsqc.axes != ['N', 'H']:
         raise ValueError('oops, unexpected axis order!')
     
-    for (n1id, n1pk) in nhsqc.peaks.items():
-        for (n2id, n2pk) in nhsqc.peaks.items():
-            n1, h1 = map(lambda x: x.shift, n1pk.dims)
-            n2, h2 = map(lambda x: x.shift, n2pk.dims)
-            if abs(n2 - n1) <= NTOL and abs(h2 - h1) <= HTOL and n1id < n2id:
-                print 'peak1', n1id, n1pk
-                print 'peak2', n2id, n2pk
-                print 'spin systems1: ', map(lambda x: spins[x], findSpinsystemsOfPeak(spins, 'nhsqc', n1id))
-                print 'spin systems2: ', map(lambda x: spins[x], findSpinsystemsOfPeak(spins, 'nhsqc', n2id))
+    peaks = nhsqc.getPeaks()
+    
+    for p1 in peaks:
+        for p2 in peaks:
+            n1, h1 = map(fst, p1.dims)
+            n2, h2 = map(fst, p2.dims)
+            if abs(n2 - n1) <= NTOL and abs(h2 - h1) <= HTOL and p1.id < p2.id:
+                print 'peak1', p1
+                print 'peak2', p2
+                print 'spin systems1: ', findSpinsystemsOfPeak(spins, p1)
+                print 'spin systems2: ', findSpinsystemsOfPeak(spins, p2)
                 print '\n'
 
 
@@ -84,73 +84,71 @@ def analyzeSpinSystems(proj):
     """
     Project -> ([(SpinSystemID, [Float], [(Int, String)])], Map Int Int)
     """
-    nhsqc, hnco = proj.spectra['nhsqc'], proj.spectra['hnco']
-    spins = proj.spinsystems
+    hncopeaks = proj._spectra['hnco'].getPeaks()
+    spins = proj.getSpinSystems()
     
     # 1. find lone NHSQC peaks
     #   - get list of all NHSQC peak ids -- wait, isn't this unnecessary since I have a spin system for each NHSQC peak?
     #   - figure out which spin systems don't have any hnco peaks
     print 'spin systems with more or less than 1 HNCO peak:'
-    for (ssid, ss) in spins.items():
-        if len(ss.pkids) != 2 and len(nhsqc.peaks[ss.pkids[0][1]].tags) == 0:
-            print ssid, '    ', map(lambda x: x.shift, nhsqc.peaks[ssid].dims), '    ', ss.pkids
+    joined = joined2(spins, hncopeaks)
+    grouped = groupBy(fst, joined, snd)
+    badss = filter(lambda x: len(x[1]) != 1, grouped)
+    for ss in badss:
+        print ss
     print '\n'
     
     # 2. find ??? HNCO peaks -- member of < or > 1 spin system
     #   - get list of HNCO peak ids
     #   - look through all spin systems, and total up the hnco peak ids in each
-    hncoids = dict((pkid, 0) for (pkid, pk) in hnco.peaks.items() if 'backbone amide' in pk.tags)
-    for (ssid, ss) in spins.items():
-        for (spec, pid) in ss.pkids:
-            if spec == 'hnco' and hncoids.has_key(pid):
-                hncoids[pid] += 1
-    for (key, val) in hncoids.items():
-        if val != 1:
-            print 'hnco peak', key, 'is interesting: ', val, 'spin systems!'
-        else:
-            print key, 'is boring'
+    backbonepks = joined2(spins, filter(lambda pk: 'backbone amide' in pk.tags, hncopeaks))
+    grped2 = groupBy(snd, backbonepks, fst)
+    badpks = filter(lambda q: len(q[1]) != 1, grped2)
+    for pk in badpks:
+        print pk
 
 
 def checkTags(proj):
     """
     Project -> [(String, PeakID)]
     """
-    for (_, pk) in proj.spectra['hnco'].peaks.items():
+    print 'find "problems" with HNCO peak tags'
+    for pk in proj._spectra['hnco'].getPeaks():
         if len(pk.tags) != 1:
             print 'problem'
         else:
-            print 'good', _
+            print 'good', pk
 
 
 def peakListOut(proj):
     """
     Project -> IO ()
     """
-    nhsqc = proj.spectra['nhsqc']
+    nhsqc = proj._spectra['nhsqc']
+    peaks = nhsqc.getPeaks()
     
-    proj.spectra['nhsqc_good'] = filterSpecPeaks(lambda pk: 'backbone amide' in pk.tags, nhsqc)
-    proj.spectra['nhsqc_bad'] = filterSpecPeaks(lambda pk: 'backbone amide' not in pk.tags, nhsqc)
+    proj.spectra['nhsqc_good'] = filter(lambda pk: 'backbone amide' in pk.tags, peaks)
+    proj.spectra['nhsqc_bad'] = filter(lambda pk: 'backbone amide' not in pk.tags, peaks)
     
     pt.xeasy_out(proj, {'nhsqc_good': ROOT + "nhsqc_good.txt", 'nhsqc_bad': ROOT + "nhsqc_bad.txt"})
 
 
 def findJunkPeaksInSpinSystems(proj):
     """
-    Project -> ([(Int, Int, [String])], [(String, String, [String], [Float])])
+    Project -> ???
     """
-    hnco = proj.spectra['hnco']
-    pks = filterSpecPeaks(lambda pk: pk.tags != ['backbone amide'], hnco).peaks
-    for (ssid, ss) in proj.spinsystems.items():
-        for (spec, pkid) in ss.pkids:
-            if spec == 'hnco' and pkid in pks:
-                print 'uh-oh, problem with ', pkid, 'in spin system', ssid, 'with tags', pks[pkid].tags
-    hncoids = dict((pkid, []) for (pkid, pk) in hnco.peaks.items())
-    for (ssid, ss) in proj.spinsystems.items():
-        for (spec, pid) in ss.pkids:
-            if spec == 'hnco':
-                hncoids[pid].append(ssid)
-    for (key, val) in hncoids.items():
-        print key, '    ', val, '    ', hnco.peaks[key].tags, '    ', map(lambda x: x.shift, hnco.peaks[key].dims)
+    hnco = proj._spectra['hnco']
+    pks = filter(lambda pk: pk.tags != ['backbone amide'], hnco.getPeaks())
+    uhohs = joined2(proj.getSpinSystems(), pks)
+    for (ss, pk) in uhohs:
+        print 'uh-oh, problem with ', pk.id, 'in spin system', ss.id, 'with tags', pk.tags
+
+    # find the spin systems for each hnco peak ???
+    #   I don't understand this
+    pk_ss = joined2(proj.getSpinSystems(), hnco.getPeaks())
+    grped2 = groupBy(snd, pk_ss, fst)
+    for (peak, sss) in grped2.items():
+        print peak.tags, '    ', sss, '    ', peak.getPosition()
     
     
 def addTag(proj):
@@ -172,9 +170,9 @@ def buildSpinSystems(proj, HTOL=0.025, NTOL=0.2):
     Project -> IO Project
     builds spin systems along the way based on matching
     """
-    nhsqc, hnco = proj.spectra['nhsqc'], proj.spectra['hnco']
+    nhsqc, hnco = proj._spectra['nhsqc'], proj._spectra['hnco']
     
-    shf = attrgetter('shift')
+    shf = lambda x: x.shift
     ssid = 1
     
     print hnco.axes, nhsqc.axes
