@@ -1,11 +1,13 @@
 from . import inout as pt
 from . import model
+from .algebra import ffilter, inner_join
 from operator import attrgetter
 
 
-loadProject = pt.json_in
+ROOT = '../../PeakPicker/'
 
-ROOT = '../../PeakPick/'
+def getData(root=ROOT):
+    return pt.json_in(root + 'project.txt')
 
 
 def filterSpecPeaks(pred, spec):
@@ -13,21 +15,36 @@ def filterSpecPeaks(pred, spec):
     Filter peaks from a spectrum based on a predicate,
     returning a new spectrum.
     '''
-    peaks = dict([(pkid, pk) for (pkid, pk) in spec.peaks.iteritems() if pred(pk)]) # filter(pred, spec.peaks)
+    peaks = ffilter(pred, spec.peaks)
     return model.Spectrum(spec.axes, peaks)
 
 
-def joinSSToPeaks(prj):
-    ss = prj.spinsystems
+def getAllPeaks(prj):
+    """
+    Project -> [(String, Int, Peak)]
+    """
     peaks = []
     for (name, spectrum) in prj.spectra.iteritems():
-        peaks.extend(spectrum.peaks)
-    joined = {}
+        peaks.extend([(name, pkid, pk) for (pkid, pk) in spectrum.peaks.iteritems()])
+    return peaks
+
+
+def joinSSToPeaks(prj):
+    joined, ss = {}, prj.spinsystems
     for (ssid, spinsys) in ss.iteritems():
         pks = [prj.spectra[pk_spectrum].peaks[pk_id] for (pk_spectrum, pk_id) in spinsys.pkids]
         joined[ssid] = pks
     return joined
-            
+
+def joined2(prj):
+    """
+    Project -> [(Int, SpinSystem, [(Int, Peak)])]
+    """
+    peaks = getAllPeaks(prj)
+    def p(ss, pk):
+        return list(pk[:2]) in ss[1].pkids
+    joined = inner_join(p, prj.spinsystems.iteritems(), peaks)
+    return joined
 
 
 def findSpinsystemsOfPeak(spins, spec, pid):
@@ -36,9 +53,8 @@ def findSpinsystemsOfPeak(spins, spec, pid):
     """
     ss_ids = []
     for (ssid, ss) in spins.items():
-        for pkid in ss.pkids:
-            if [spec, pid] == pkid:
-                ss_ids.append(ssid)
+        if [spec, pid] in ss.pkids:
+            ss_ids.append(ssid)
     return ss_ids
 
 
@@ -46,7 +62,6 @@ def findCloseNHSQCPeaks(proj, HTOL=0.025, NTOL=0.2):
     """
     Project -> [((Int, Peak, [SpinSystem]), (Int, Peak, [SpinSystem]))]
     """
-    HTOL, NTOL = 0.025, 0.2
     nhsqc = proj.spectra['nhsqc']
     spins = proj.spinsystems
     
@@ -94,9 +109,6 @@ def analyzeSpinSystems(proj):
             print 'hnco peak', key, 'is interesting: ', val, 'spin systems!'
         else:
             print key, 'is boring'
-    
-    # 3. find HSQC peaks close (i.e. within tolerances) of other HSQC peaks
-    #   - what should I do with this data?
 
 
 def checkTags(proj):

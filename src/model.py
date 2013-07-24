@@ -57,6 +57,14 @@ class Peak(MyBase):
         self.dims = dims
         self.tags = tags
         self.height = height
+    
+    def __repr__(self):
+        pos, ats = [], []
+        for d in self.dims:
+            pos.append(d.shift)
+            ats.append(d.atomtypes)
+        return repr({'height': self.height, 'tags': self.tags,
+                     'position': pos, 'atomtypes': ats})
 
 
 class Spectrum(MyBase):
