@@ -1,20 +1,31 @@
 from . import inout as pt
 from . import model
-from .algebra import ffilter, inner_join, groupBy
+from .algebra import ffilter, inner_join, groupBy, split, concatMap
 from .querymodel import fromModel # bring this into scope b/c it seems convenient ... or something
 from operator import attrgetter
 
 
 ROOT = '../PeakPicker/'
 
-def getData(root=ROOT):
-    return fromModel(pt.json_in(root + 'project.txt'))
+def getData(root=ROOT, simple=True):
+    data = pt.json_in(root + 'project.txt')
+    if simple:
+        return fromModel(data)
+    return data
 
 def fst(x):
     return x[0]
 
 def snd(x):
     return x[1]
+
+def filterSpecPeaks(pred, spec):
+    '''
+    Filter peaks from a spectrum based on a predicate,
+    returning a new spectrum.
+    '''
+    peaks = ffilter(pred, spec.peaks)
+    return model.Spectrum(spec.axes, peaks)
 
 
 def getAllPeaks(prj):
@@ -311,7 +322,74 @@ def findHNCACBStrangeness(proj):
     # HNCACB peaks in more or less than 1 spin system
     # spin systems with 0 HNCACB peaks
     # spin systems with lots of HNCACB peaks?  what's a good threshold?
+
+
+def inspectHNCACBPeaks(proj):
+    """ look at whether they're tagged or not"""
+    pks = proj._spectra['hncacb'].getPeaks()
+    (good, bad) = split(lambda pk: pk.tags == [], pks)
     
+    for i, p in enumerate(good):
+        if p.height > 0:
+            print 'C-Alpha? ', p, i
+        elif p.height < 0:
+            print 'C-Beta? ', p, i
+        else:
+            raise ValueError('peak with 0 height ???')
+    
+    print '\n\n'
+    
+    for j, pk in enumerate(bad):
+        print 'bad peak', pk, j
+
+
+def classifyHNCACBPeaks():
+    """ height > 0 -> C-Alpha, height < 0 -> C-Beta """
+    proj = getData(simple=False)
+    for (i, (_, pk)) in enumerate(filter(lambda x: x[1].tags == [], proj.spectra['hncacb'].peaks.items())):
+        if pk.height > 0:
+            t = 'CA'
+        else:
+            t = 'CB'
+        pk.dims[2].atomtypes.append(t)
+        pk.tags.append('backbone')
+        print i, pk
+    pt.json_out(ROOT + "project4.txt", proj)
+
+
+def dumpGoodDataToXEasy():
+    """
+    Project -> IO ()
+    """
+    proj = getData(simple=False)
+    spectra = [('nhsqc', 'backbone amide'),
+               ('hnco', 'backbone amide'),
+               ('hncacb', 'backbone')]
+    outs = {}
+    for (name, tag) in spectra:
+        spec = proj.spectra[name]
+        good_peaks = filterSpecPeaks(lambda pk: tag in pk.tags, spec)
+        proj.spectra[name + "_good"] = good_peaks
+        outs[name + "_good"] = ROOT + name + "_good.txt"
+    
+    pt.xeasy_out(proj, outs)
+
+
+def findHNCACBPeaksInSSAndTaggedBackbone():
+    """
+    HNCACB peaks in a spin system but not tagged 'backbone' or vice versa
+    """
+    proj = getData()
+    # map (get 1) . filter ((==) "hncacb" . get 0) $ concatMap (get pkids) (getSpinSystems proj)
+    inss = map(lambda x: x[1], filter(lambda n: n[0] == 'hncacb', concatMap(lambda ss: ss.pkids, proj.getSpinSystems())))
+    back = map(lambda x: x.id, filter(lambda pk: pk.tags == ['backbone'], proj._spectra['hncacb'].getPeaks()))
+    return inss, back
+
+
+def addSequence():
+    proj = getData(simple=False)
+    proj.molecule.residues = list('GGGRDYKDDDDKGTMELELRFFATFREVVGQKSIYWRVDDDATVGDVLRSLEAEYDGLAGRLIEDGEVKPHVNVLKNGREVVHLDGMATALDDGDAVSVFPPVAGG')
+    pt.json_out(ROOT + "project5.txt", proj)
 
 
 if __name__ == "__main__":
@@ -322,5 +400,4 @@ if __name__ == "__main__":
     # checkTags()
     # analyzeSpinSystems()
     # findNHSQCStrangenessAndAddHNCACBPeaksToSpinSystems()
-    findHNCACBStrangeness()
-
+    pass
