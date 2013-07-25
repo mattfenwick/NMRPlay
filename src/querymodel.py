@@ -63,11 +63,8 @@ class Spectrum(MyBase):
 class Molecule(MyBase):
     
     def __init__(self, residues):
-        if not isinstance(residues, dict):
+        if not isinstance(residues, list):
             raise TypeError(('residues', residues))
-        for rid in residues.keys():
-            if not isinstance(rid, int):
-                raise TypeError(('residue id', rid))
         self.residues = residues
     
     

@@ -17,11 +17,34 @@ def ffilter(predicate, coll):
         return filter(predicate, coll)
     elif isinstance(coll, dict):
         out = {}
-        for (key, value) in dict.iteritems():
+        for (key, value) in coll.iteritems():
             if predicate(value):
                 out[key] = value
         return out
     raise TypeError(('invalid type to ffilter', coll))
+
+
+def concatMap(f, xs):
+    """
+    (a -> [b]) -> [a] -> [b]
+    """
+    out = []
+    for x in xs:
+        out.extend(f(x))
+    return out
+
+
+def split(predicate, coll):
+    """
+    (a -> Bool) -> [a] -> ([a], [a])
+    """
+    yeses, nos = [], []
+    for c in coll:
+        if predicate(c):
+            yeses.append(c)
+        else:
+            nos.append(c)
+    return (yeses, nos)
 
 
 def fmap(f, coll):
@@ -29,7 +52,7 @@ def fmap(f, coll):
         return map(f, coll)
     elif isinstance(coll, dict):
         out = {}
-        for (key, value) in dict.iteritems():
+        for (key, value) in coll.iteritems():
             out[key] = f(value)
         return out
     raise TypeError(('invalid type to fmap', coll))
