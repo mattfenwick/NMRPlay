@@ -357,7 +357,7 @@ def classifyHNCACBPeaks():
     pt.json_out(ROOT + "project4.txt", proj)
 
 
-def dumpGoodDataToXEasy():
+def dumpDataToXEasy():
     """
     Project -> IO ()
     """
@@ -369,8 +369,13 @@ def dumpGoodDataToXEasy():
     for (name, tag) in spectra:
         spec = proj.spectra[name]
         good_peaks = filterSpecPeaks(lambda pk: tag in pk.tags, spec)
+        bad_peaks = filterSpecPeaks(lambda pk: tag not in pk.tags, spec)
         proj.spectra[name + "_good"] = good_peaks
-        outs[name + "_good"] = ROOT + name + "_good.txt"
+        proj.spectra[name + "_bad" ] = bad_peaks
+        proj.spectra[name + "_full"] = spec
+        outs[name + "_good"] = ROOT + name + "_good.peaks"
+        outs[name + "_bad" ] = ROOT + name + "_bad.peaks"
+        outs[name + "_full"] = ROOT + name + "_full.peaks"
     
     pt.xeasy_out(proj, outs)
 
@@ -391,6 +396,51 @@ def addSequence():
     proj.molecule.residues = list('GGGRDYKDDDDKGTMELELRFFATFREVVGQKSIYWRVDDDATVGDVLRSLEAEYDGLAGRLIEDGEVKPHVNVLKNGREVVHLDGMATALDDGDAVSVFPPVAGG')
     pt.json_out(ROOT + "project5.txt", proj)
 
+
+def handleArginineSidechains():
+    proj = getData(simple=False)
+    for ssid in [99, 111, 141]:
+        ss = proj.spinsystems[ssid]
+        ss.tags.append('folded: NE once, CZ twice')
+        ss.tags.append('sidechain')
+        ss.aatypes.append('arginine')
+        for (name, pkid) in ss.pkids:
+            peak = proj.spectra[name].peaks[pkid]
+            if name == 'nhsqc':
+                peak.dims[0].atomtypes.append('NE')
+                peak.dims[1].atomtypes.append('HE')
+            elif name == 'hnco':
+                peak.dims[0].atomtypes.append('HE')
+                peak.dims[1].atomtypes.append('NE')
+                peak.dims[2].atomtypes.append('CZ')
+            elif name == 'hncacb':
+                peak.dims[0].atomtypes.append('HE')
+                peak.dims[1].atomtypes.append('NE')
+                at = peak.dims[2].atomtypes
+                if at == ['CA']:
+                    peak.dims[2].atomtypes = ['CD']
+                elif at == ['CB']:
+                    peak.dims[2].atomtypes = ['CG']
+                else:
+                    peak.dims[2].atomtypes = ['CD']
+                    print 'atomtype problem with: ', ssid, name, pkid, peak
+#                    raise ValueError('inner oops ' + str(at))
+                peak.tags = ['arginine sidechain']
+            else:
+                raise ValueError('outer oops')
+#        print ss
+    pt.json_out(ROOT + "project7.txt", proj)
+
+
+def hncacbOverlap():
+    proj = getData()
+#    jed = joined2(proj.getSpinSystems(), getAllPeaks(proj))
+#    return groupBy(fst, jed, snd)
+#    return jed
+    peaks = proj._spectra['hncacb'].getPeaks()
+    simple = [(i, x.dims[2][0], x.dims[2][1][0]) for (i, x) in enumerate(peaks, start=1) if 'backbone' in x.tags]
+    selfjoined = inner_join(lambda p, q: p[2] == q[2] and abs(p[1] - q[1]) < 0.01 and p[0] < q[0], simple, simple)
+    return selfjoined
 
 if __name__ == "__main__":
     # findCloseNHSQCPeaks()

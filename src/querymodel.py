@@ -67,6 +67,9 @@ class Molecule(MyBase):
             raise TypeError(('residues', residues))
         self.residues = residues
     
+    def getByAAType(self, aatypes):
+        return filter(lambda x: x[1] in aatypes, enumerate(self.residues, start=1))
+    
     
 class SpinSystem(MyBase):
     '''
