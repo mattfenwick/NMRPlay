@@ -432,6 +432,42 @@ def handleArginineSidechains():
     pt.json_out(ROOT + "project7.txt", proj)
 
 
+def hncacbWeirdness():
+    """hncacb peaks not tagged 'backbone' but in a spin system,
+       or those tagged 'backbone' but not in a spin system"""
+    proj = getData()
+    peaks = proj._spectra['hncacb'].getPeaks()
+    inss = set(map(lambda x: x[1].id, joined2(proj.getSpinSystems(), peaks)))
+    counts = ([], [], [], [])
+    tags = set([])
+    for peak in peaks:
+        tags = tags.union(set(peak.tags))
+        if 'edge' in peak.tags or 'processing artifact' in peak.tags:
+            if peak.id in inss:
+                counts[2].append(peak.id)
+                print 'badly tagged but in spin system', peak.id, peak.tags
+            else:
+                counts[3].append(peak.id)
+                pass # good
+        else:
+            if peak.id in inss:
+                counts[0].append(peak.id)
+            else:
+                counts[1].append(peak.id)
+                print (' ' * 75) + 'nicely tagged but not in spin system', peak.id, peak.tags
+    print map(len, counts)
+    print 'tags: ', tags
+    return counts
+#    print counts[2]
+#    proj2 = getData(simple=False)
+#    bads = map(lambda q: ['hncacb', q], counts[2])
+#    for (_, ss) in proj2.spinsystems.iteritems():
+#        if ['hncacb', 769] in ss.pkids:
+#            print 'wow', ss
+#        ss.pkids = filter(lambda x: x not in bads, ss.pkids)
+#    pt.json_out(ROOT + "project8.txt", proj2)
+
+
 def hncacbOverlap():
     proj = getData()
 #    jed = joined2(proj.getSpinSystems(), getAllPeaks(proj))
@@ -441,6 +477,7 @@ def hncacbOverlap():
     simple = [(i, x.dims[2][0], x.dims[2][1][0]) for (i, x) in enumerate(peaks, start=1) if 'backbone' in x.tags]
     selfjoined = inner_join(lambda p, q: p[2] == q[2] and abs(p[1] - q[1]) < 0.01 and p[0] < q[0], simple, simple)
     return selfjoined
+
 
 if __name__ == "__main__":
     # findCloseNHSQCPeaks()
