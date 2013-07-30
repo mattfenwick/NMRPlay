@@ -73,24 +73,12 @@ class Molecule(MyBase):
     def getByAAType(self, aatypes):
         return filter(lambda x: x[1] in aatypes, enumerate(self.residues, start=1))
     
-    def searchSequence(self, fragment):
-        """
-        in: sequence, out: list of starting positions
-        String -> [Int]
-        only does exact matches
-        """
-        i = 0
-        positions = []
-        flength = len(fragment)
-        residues = ''.join(self.residues) # gotta make sure they're both strings
-        while i < len(residues):
-            if residues[i : i + flength] == fragment:
-                positions.append(i)
-            i += 1
-        return positions
-    
     def search(self, expr):
-        regex = re.compile('(' + expr + ')') # make it capture
+        """
+        in: sequence, out: list of (0-based index of start, matched text)
+        String -> [(Int, String)]
+        """
+        regex = re.compile('(' + expr + ')') # make it capturing so I can extract the text later
         residues = ''.join(self.residues)
         positions = []
         i = 0
