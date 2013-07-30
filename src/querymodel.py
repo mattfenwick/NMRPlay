@@ -1,4 +1,7 @@
+import re
 
+        
+        
 class MyBase(object):
     '''
     Provides:
@@ -70,6 +73,34 @@ class Molecule(MyBase):
     def getByAAType(self, aatypes):
         return filter(lambda x: x[1] in aatypes, enumerate(self.residues, start=1))
     
+    def searchSequence(self, fragment):
+        """
+        in: sequence, out: list of starting positions
+        String -> [Int]
+        only does exact matches
+        """
+        i = 0
+        positions = []
+        flength = len(fragment)
+        residues = ''.join(self.residues) # gotta make sure they're both strings
+        while i < len(residues):
+            if residues[i : i + flength] == fragment:
+                positions.append(i)
+            i += 1
+        return positions
+    
+    def search(self, expr):
+        regex = re.compile('(' + expr + ')') # make it capture
+        residues = ''.join(self.residues)
+        positions = []
+        i = 0
+        while i < len(residues):
+            match = regex.match(residues[i:])
+            if match:
+                positions.append((i, str(match.groups()[0])))
+            i += 1
+        return positions
+
     
 class SpinSystem(MyBase):
     '''
