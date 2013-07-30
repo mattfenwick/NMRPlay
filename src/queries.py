@@ -438,6 +438,13 @@ def hncacbWeirdness():
     proj = getData()
     peaks = proj._spectra['hncacb'].getPeaks()
     inss = set(map(lambda x: x[1].id, joined2(proj.getSpinSystems(), peaks)))
+    ssid_to_pkids = groupBy(lambda x:x[0].id, joined2(proj.getSpinSystems(), peaks), lambda y: y[1].id)
+    pkid_to_ssids = {}
+    for (s, ps) in ssid_to_pkids.items():
+        for p in ps:
+            if not pkid_to_ssids.has_key(p):
+                pkid_to_ssids[p] = []
+            pkid_to_ssids[p].append(s)
     counts = ([], [], [], [])
     tags = set([])
     for peak in peaks:
@@ -445,7 +452,7 @@ def hncacbWeirdness():
         if 'edge' in peak.tags or 'processing artifact' in peak.tags:
             if peak.id in inss:
                 counts[2].append(peak.id)
-                print 'badly tagged but in spin system', peak.id, peak.tags
+                print 'badly tagged but in spin system', peak.id, peak.tags, ' spins: ', pkid_to_ssids[peak.id]
             else:
                 counts[3].append(peak.id)
                 pass # good
@@ -468,6 +475,44 @@ def hncacbWeirdness():
 #    pt.json_out(ROOT + "project8.txt", proj2)
 
 
+def removeHNCACBJunkFromSS():
+    proj = getData(simple=False)
+    pks = proj.spectra['hncacb'].peaks
+    def predicate(p):
+        name, pkid = p
+        if name == 'hncacb':
+            if 'processing artifact' in pks[pkid].tags:
+                if pks[pkid].tags != ['processing artifact']:
+                    raise ValueError('oops')
+                else:
+                    return False
+            else: # hncacb but not an artifact, keep it
+                return True 
+        else: # not hncacb, keep it
+            return True
+    dumped = set([])
+    for (_, ss) in proj.spinsystems.items():
+        before = [i for (_, i) in ss.pkids if _ == 'hncacb']
+        ss.pkids = filter(predicate, ss.pkids)
+        after = [i for (_, i) in ss.pkids if _ == "hncacb"]
+        dumped = dumped.union(set(before) - set(after))
+    pt.json_out(ROOT + "project9.txt", proj)
+    return dumped
+
+
+def inOut():
+    proj = getData(simple=False)
+    pt.json_out(ROOT + "project10.txt", proj)
+
+
+def retagSpinSystems():
+    proj = getData(simple=False)
+    for (_, s) in proj.spinsystems.items():
+        if s.tags == []:
+            s.tags.append('backbone')
+    pt.json_out(ROOT + "project11.txt", proj)
+
+
 def hncacbOverlap():
     proj = getData()
 #    jed = joined2(proj.getSpinSystems(), getAllPeaks(proj))
@@ -477,6 +522,14 @@ def hncacbOverlap():
     simple = [(i, x.dims[2][0], x.dims[2][1][0]) for (i, x) in enumerate(peaks, start=1) if 'backbone' in x.tags]
     selfjoined = inner_join(lambda p, q: p[2] == q[2] and abs(p[1] - q[1]) < 0.01 and p[0] < q[0], simple, simple)
     return selfjoined
+
+
+def getCACBPairs():
+    proj = getData()
+    goodss = [s for s in proj.getSpinSystems() if 'backbone' in s.tags]
+    jed = joined2(goodss, proj._spectra['hncacb'].getPeaks())
+    gred = groupBy(lambda x: x[0].id, jed, lambda y: y[1].getPosition()) # RIGHT HERE !!!
+    return gred
 
 
 if __name__ == "__main__":
