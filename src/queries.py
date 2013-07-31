@@ -532,6 +532,70 @@ def getCACBPairs():
     return gred
 
 
+def findAlaPeaks():
+    proj = getData()
+    pks = []
+    for x in proj._spectra['hncacb'].getPeaks():
+        if x.getPosition()[2] < 25 and 'backbone' in x.tags:
+            pks.append(x)
+    return sorted(pks, key=lambda x: x.getPosition()[2])
+
+
+def findSerThrPeaks():
+    proj = getData()
+    pks = []
+    for x in proj._spectra['hncacb'].getPeaks():
+        if x.getPosition()[2] > 50 and 'backbone' in x.tags and 'CB' in x.dims[2][1]:
+            pks.append(x)
+    return sorted(pks, key=lambda x: x.getPosition()[2])
+
+
+def findGlyPeaks():
+    proj = getData()
+    pks = []
+    for x in proj._spectra['hncacb'].getPeaks():
+        if 35 < x.getPosition()[2] < 50 and 'backbone' in x.tags and 'CA' in x.dims[2][1]:
+            pks.append(x)
+    return sorted(pks, key=lambda x: x.getPosition()[2])
+
+
+def findAssignedPeaks(specname='hncacb'):
+    proj = getData()
+    pks, junk = [], []
+    for pk in proj._spectra[specname].getPeaks():
+        if 'backbone' in pk.tags:
+            if 'i' in pk.tags or 'i-1' in pk.tags:
+                pks.append(pk)
+            else:
+                junk.append(pk)
+        else:
+            junk.append(pk)
+    return (pks, junk)
+
+
+def findSSFragments():
+    proj = getData()
+    spins = proj.getSpinSystems()
+    frags = {}
+    for s in spins:
+#        if not 'backbone' in s.tags: # not sure how important it is to ditch these ...
+#            continue                 # after all, they don't hurt anything, right?
+        if len(s.ssnexts) > 1:
+            raise ValueError('oops, not expecting ambiguous nexts')
+        frags[s.id] = s.ssnexts[:] # make a new copy ... just b/c I don't like modding data that I don't "own"
+    while True:
+        changed = False
+        for k in frags:
+            if len(frags[k]) > 0 and frags[k][-1] in frags:
+                frags[k].extend(frags[frags[k][-1]])
+                frags.pop(frags[k][-1])
+                changed = True
+                break
+        if not changed:
+            break
+    return frags
+
+
 if __name__ == "__main__":
     # findCloseNHSQCPeaks()
     # peakListOut()
