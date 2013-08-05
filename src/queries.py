@@ -541,6 +541,16 @@ def findAlaPeaks():
     return sorted(pks, key=lambda x: x.getPosition()[2])
 
 
+def findAlaSS():
+    proj = getData()
+    return sorted([s for s in proj.getSpinSystems() if 'alanine' in s.aatypes], key=lambda ss: ss.id)
+
+
+def findSSByAAType(aatype='alanine'):
+    proj = getData()
+    return [ss for ss in proj.getSpinSystems() if aatype in ss.aatypes]
+
+
 def findSerThrPeaks():
     proj = getData()
     pks = []
@@ -550,11 +560,21 @@ def findSerThrPeaks():
     return sorted(pks, key=lambda x: x.getPosition()[2])
 
 
-def findGlyPeaks():
+def findVIPeaks():
+    """not 100% sure that they'll be Valine/Isoleucine CAs"""
     proj = getData()
     pks = []
     for x in proj._spectra['hncacb'].getPeaks():
-        if 35 < x.getPosition()[2] < 50 and 'backbone' in x.tags and 'CA' in x.dims[2][1]:
+        if x.getPosition()[2] > 60 and 'backbone' in x.tags and 'CA' in x.dims[2][1] and not 'i' in x.tags and not 'i-1' in x.tags:
+            pks.append(x)
+    return sorted(pks, key=lambda x: x.getPosition()[2])
+
+
+def findGlyPeaks(upper=50):
+    proj = getData()
+    pks = []
+    for x in proj._spectra['hncacb'].getPeaks():
+        if x.getPosition()[2] < upper and 'CA' in x.dims[2][1] and 'backbone' in x.tags:
             pks.append(x)
     return sorted(pks, key=lambda x: x.getPosition()[2])
 
@@ -587,13 +607,61 @@ def findSSFragments():
         changed = False
         for k in frags:
             if len(frags[k]) > 0 and frags[k][-1] in frags:
-                frags[k].extend(frags[frags[k][-1]])
-                frags.pop(frags[k][-1])
+                # print 'k: ', k, frags
+                temp = frags.pop(frags[k][-1])
+                frags[k].extend(temp)
                 changed = True
-                break
+                break # umm ... which loop does this break out of?
         if not changed:
             break
     return frags
+
+
+def findMatchingCACB(ca, cb, tola=0.2, tolb=0.2):
+    proj = getData()
+    cas, cbs = [], []
+    for pk in proj._spectra['hncacb'].getPeaks():
+#        print pk
+        shift, tags = pk.dims[2]
+ #       if 'CA' in tags:
+        if pk.height > 0: # it's a CA ... usually !!! 
+            adiff = abs(shift - ca)
+            if adiff <= tola:
+                cas.append((adiff, pk))
+#        elif 'CB' in tags:
+        elif pk.height < 0: # it's a CB ... usually !!!
+            bdiff = abs(shift - cb)
+            if bdiff <= tolb:
+#                print 'found one: ', bdiff, shift, cb
+                cbs.append((bdiff, pk))
+        else: # nothing to do
+            pass
+    both = []
+    for (_1, a) in cas:
+        for (_2, b) in cbs:
+            if abs(a.getPosition()[0] - b.getPosition()[0]) <= 0.04 and abs(a.getPosition()[1] - b.getPosition()[1]) <= 0.2:
+                both.append(((_1, _2), (a, b)))
+    out = (sorted(cas, key=fst), 
+           sorted(cbs, key=fst), 
+           sorted(both, key=lambda x: sum(x[0])))
+    return out
+
+
+def findSequenceAssignments():
+    proj = getData()
+    res = dict((i, []) for (i, _) in enumerate(proj.molecule.residues, start=1))
+    for s in proj.getSpinSystems():
+        for i in s.residueids:
+            res[i].append(s.id)
+    for (k, v) in sorted(res.items(), key=fst):
+        aatype = proj.molecule.residues[k - 1]
+        if len(v) == 1:
+            print k, aatype, '  ', v[0]
+        elif len(v) == 0:
+            print k, aatype, '   --'
+        else:
+            print k, v
+#    return res
 
 
 if __name__ == "__main__":
