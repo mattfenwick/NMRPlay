@@ -598,8 +598,10 @@ def findSSFragments():
     spins = proj.getSpinSystems()
     frags = {}
     for s in spins:
-#        if not 'backbone' in s.tags: # not sure how important it is to ditch these ...
-#            continue                 # after all, they don't hurt anything, right?
+        if not 'backbone' in s.tags: # not sure how important it is to ditch these ...
+            if len(s.ssnexts) > 0: # or len(s.residueids) > 0:  # <-- this is now okay since I assigned a sidechain system
+                raise ValueError('something screwy going on here ...')
+            continue                 # after all, they don't hurt anything, right? wait, yes they do:  they make it confusing
         if len(s.ssnexts) > 1:
             raise ValueError('oops, not expecting ambiguous nexts')
         frags[s.id] = s.ssnexts[:] # make a new copy ... just b/c I don't like modding data that I don't "own"
@@ -620,27 +622,29 @@ def findSSFragments():
 def findMatchingCACB(ca, cb, tola=0.2, tolb=0.2):
     proj = getData()
     cas, cbs = [], []
+    joined = groupBy(lambda x: x[1].id, 
+                     joined2([s for s in proj.getSpinSystems() if 'backbone' in s.tags], proj._spectra['hncacb'].getPeaks()), 
+                     lambda y: y[0].id)
     for pk in proj._spectra['hncacb'].getPeaks():
-#        print pk
         shift, tags = pk.dims[2]
  #       if 'CA' in tags:
         if pk.height > 0: # it's a CA ... usually !!! 
             adiff = abs(shift - ca)
             if adiff <= tola:
-                cas.append((adiff, pk))
+                cas.append((adiff, pk, joined[pk.id] if joined.has_key(pk.id) else None))
 #        elif 'CB' in tags:
         elif pk.height < 0: # it's a CB ... usually !!!
             bdiff = abs(shift - cb)
             if bdiff <= tolb:
 #                print 'found one: ', bdiff, shift, cb
-                cbs.append((bdiff, pk))
+                cbs.append((bdiff, pk, joined[pk.id] if joined.has_key(pk.id) else None))
         else: # nothing to do
             pass
     both = []
-    for (_1, a) in cas:
-        for (_2, b) in cbs:
+    for (_1, a, ss1) in cas:
+        for (_2, b, ss2) in cbs:
             if abs(a.getPosition()[0] - b.getPosition()[0]) <= 0.04 and abs(a.getPosition()[1] - b.getPosition()[1]) <= 0.2:
-                both.append(((_1, _2), (a, b)))
+                both.append(((_1, _2), (a, b), (ss1, ss2)))
     out = (sorted(cas, key=fst), 
            sorted(cbs, key=fst), 
            sorted(both, key=lambda x: sum(x[0])))
@@ -660,8 +664,19 @@ def findSequenceAssignments():
         elif len(v) == 0:
             print k, aatype, '   --'
         else:
-            print k, v
+            print k, aatype, '  ', v
 #    return res
+
+
+def getShifts():
+    """
+    this is pretty silly to write without having atom types assigned 
+    so I guess I'll just hack it for now
+    """
+    proj = getData()
+    jed = joined2(proj.getSpinSystems(), getAllPeaks(proj))
+    ged = groupBy(lambda x: x[0].id, jed, snd)
+    return ged
 
 
 if __name__ == "__main__":
