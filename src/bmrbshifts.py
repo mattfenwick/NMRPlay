@@ -1,4 +1,5 @@
 from .algebra import fmap, concatMap, groupBy
+import re
 
 
 def parseData(path='bmrb/avgshifts.txt'):
@@ -35,6 +36,21 @@ class ShiftStats(object):
         shifts = fmap(lambda x: x[atomname] if x.has_key(atomname) else None, self.data)
         return sorted(shifts.items(), key=lambda x:x[1])
     
+    def getByMatch(self, expr):
+        """
+        Data -> String -> [(Aatype, Atom, Float)]
+        search through all the data, and retrieve the shift statistics
+        for atoms with matching names
+        """
+        regex = re.compile('(' + expr + ')') # make it capturing so I can extract the text later
+        shifts = []
+        for (aa, atoms) in self.data.items():
+            for (a, shift) in atoms.items():
+                match = regex.match(a)
+                if match:
+                    shifts.append((aa, a, shift))
+        return shifts
+    
     def getClosest(self, atomname, val):
         shifts = self.getByAtom(atomname)
         return [(aatype, avg, abs(val - avg)) for (aatype, avg) in shifts if avg is not None]
@@ -57,7 +73,6 @@ def getClosest(val, xs):
 #    [Number] -> [[Number]] -> [[(Number, Number)]]
 #    """
 #    for (val, xs) in zip(vals, seqs):
-        
     
 
 
@@ -139,3 +154,6 @@ data = {
     'C': 175.63,  'CA': 62.53,  'CB': 32.75,  'CG1': 21.53,  'CG2': 21.33,  'H': 8.28,  'HA': 4.18,  'HB': 1.98,  'HG1': 0.82,
     'HG2': 0.8,   'N': 121.24
   }}
+
+
+stats = ShiftStats(data)

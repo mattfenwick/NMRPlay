@@ -14,7 +14,8 @@ _dig         = _oneOf('0123456789')
 _digit       = c.fmap(int, _dig)
 _int         = c.fmap(''.join, c.many1(_dig))
 _integer     = c.fmap(int, _int)
-_float       = c.app(lambda d, e, f: float(''.join([d, '.', f])), 
+_float       = c.app(lambda s, d, e, f: float(''.join([s, d, '.', f])), 
+                     c.optional('+', literal('-')),
                      _int, 
                      literal('.'), 
                      _int)
@@ -51,7 +52,7 @@ _ws_field   = c.seq2R(c.many1(_space), c.many1(not1(c.plus(_newline, _space))))
 def peakline(n):
     return c.app(lambda ident, shifts, _fields1, height, _fields2, _newl: (ident, model.Peak(shifts, float(height))), 
                  _ws_integer,
-                 c.commit('a', c.all_([_ws_float] * n)),
+                 c.bind(c.getState, lambda s: c.commit(('bad peakline or something', s), c.all_([_ws_float] * n))),
                  c.all_([_ws_field] * 2),
                  c.fmap(''.join, _ws_field),
                  c.many0(_ws_field), 

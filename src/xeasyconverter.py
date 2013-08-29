@@ -24,4 +24,4 @@ def _xeasy_to_spectrum(xpkfl):
     return pmod.Spectrum(xpkfl.dimnames, peaks)
     
 def xez2patch(projname, peakfiles):
-    return pmod.Project(projname, fmap_dict(_xeasy_to_spectrum, peakfiles), pmod.Molecule({}), {})
+    return pmod.Project(projname, fmap_dict(_xeasy_to_spectrum, peakfiles), pmod.Molecule([]), {})
