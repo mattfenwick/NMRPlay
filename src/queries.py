@@ -1,7 +1,8 @@
 from . import inout as pt
 from . import model
-from .algebra import ffilter, inner_join, groupBy, split, concatMap
-from .querymodel import fromModel # bring this into scope b/c it seems convenient ... or something
+from . import querymodel
+from .bmrbshifts import stats
+from .algebra import ffilter, inner_join, groupBy, split, concatMap, fmap
 from operator import attrgetter
 
 
@@ -10,7 +11,7 @@ ROOT = '../PeakPicker/'
 def getData(root=ROOT, simple=True):
     data = pt.json_in(root + 'project.txt')
     if simple:
-        return fromModel(data)
+        return querymodel.fromModel(data)
     return data
 
 def fst(x):
@@ -670,13 +671,217 @@ def findSequenceAssignments():
 
 def getShifts():
     """
-    this is pretty silly to write without having atom types assigned 
-    so I guess I'll just hack it for now
+    this is kind of wrong ... it's only the CA/CB of HNCACB
+    peaks that is i/i-1, the H/N shifts are always i
     """
     proj = getData()
     jed = joined2(proj.getSpinSystems(), getAllPeaks(proj))
     ged = groupBy(lambda x: x[0].id, jed, snd)
-    return ged
+    # proceed down the spin systems, adding the i peaks,
+    #   then moving to the i-1 peaks
+    atomshifts = fmap(lambda pks: concatMap(lambda pk: map(lambda d: (d, [t for t in pk.tags if t in set(['i', 'i-1'])]), pk.dims), pks), ged)
+    tags = dict(map(lambda x: (x.id, x.tags), proj.getSpinSystems()))
+    for x in tags:
+        if not x in atomshifts:
+            raise ValueError('oops')
+        tags[x] = (tags[x], atomshifts[x])
+    things = fmap(lambda y: (y[0], sorted(map(lambda z: (z[0][0], z[0][1], z[1]), y[1]), key=lambda x:x[0])), tags)
+    return things
+
+
+def loadCCONH():
+    """
+    Project -> IO Spectrum
+    """
+    proj = getData(simple=False)
+    xs = pt.xeasy_in('oops', {'cconh': ROOT + "cconh.xez"})
+    proj.spectra['cconh'] = xs.spectra['cconh']
+    pt.json_out(ROOT + "another_new.txt", proj)
+
+
+def groupCCONHPeaksIntoSpinSystems(HTOL=0.025, NTOL=0.2):
+    proj = getData(simple=False)
+    nhsqc, cconh = proj.spectra['nhsqc'], proj.spectra['cconh']
+    
+    shf = lambda x: x.shift
+    
+    print cconh.axes, nhsqc.axes
+    if cconh.axes != ['H', 'N', 'C']:
+        raise ValueError(('oops, axis order', cconh.axes))
+    
+    for ssid, ss in proj.spinsystems.items():
+        for name, nid in ss.pkids:
+            if name != 'nhsqc':
+                continue
+            for (cid, cpk) in cconh.peaks.items():
+                nhsqc_n, nhsqc_h = map(shf, nhsqc.peaks[nid].dims)
+                cconh_h, cconh_n, cconh_c = map(shf, cpk.dims)
+                if abs(nhsqc_n - cconh_n) <= NTOL and abs(nhsqc_h - cconh_h) <= HTOL:
+                    ss.pkids.append(['cconh', cid])
+                    print ssid, cid, nhsqc_n, nhsqc_h, cconh_n, cconh_h
+        
+    pt.json_out(ROOT + "new_project2.txt", proj)
+
+
+# need to also assign all the CCONH peaks to be i-1 in the carbon dimension
+# then assign atomtypes of C dimension of CCONH
+# how about tag every CCONH peak not in a spin system to "unknown"?
+
+def findSSNoCCONH():
+    proj = getData()
+    ss = [(s.id, s.tags, len(filter(lambda pkid: pkid[0] == 'cconh', s.pkids))) for s in proj.getSpinSystems()]
+    return ss
+
+
+def findCCONHWrongNumberOfSS():
+    proj = getData()
+    pks = dict((i, []) for i in range(1, 755 + 1))
+    for ss in proj.getSpinSystems():
+        for (name, pkid) in ss.pkids:
+            if name == 'cconh':
+                if not pks.has_key(pkid):
+                    pks[pkid] = []
+                pks[pkid].append(ss.id)
+    return pks
+
+
+def retagUnassignedCCONHPeaks():
+    pkAssigns = findCCONHWrongNumberOfSS()
+    proj = getData(simple=False)
+    for (pkid, ss) in pkAssigns.items():
+        if len(ss) == 0:
+            proj.spectra['cconh'].peaks[pkid].tags.append('unknown')
+        # otherwise, good to go
+    pt.json_out(ROOT + "new_project3.txt", proj)
+
+
+def findUnassignedSS():
+    yes, no = 0, 0
+    for ss in getData().getSpinSystems():
+        if len(ss.residueids) == 0:
+            print 'ss: ', ss.id, ss.tags
+            no += 1
+        else:
+            yes += 1
+    print '\n'
+    print 'yes: ', yes, '    no: ', no
+
+
+def loadHCCONHTocsy():
+    """
+    Project -> IO Spectrum
+    """
+    proj = getData(simple=False)
+    xs = pt.xeasy_in('oops', {'hcconh': ROOT + "hcconh_tocsy.xez"})
+    proj.spectra['hcconh'] = xs.spectra['hcconh']
+    pt.json_out(ROOT + "again_new.txt", proj)
+
+
+def groupHCCONHTocsyPeaksIntoSpinSystems(HTOL=0.025, NTOL=0.2):
+    proj = getData(simple=False)
+    nhsqc, hcconh = proj.spectra['nhsqc'], proj.spectra['hcconh']
+    
+    shf = lambda x: x.shift
+    
+    print hcconh.axes, nhsqc.axes
+    if hcconh.axes != ['H', 'N', 'h']:
+        raise ValueError(('oops, axis order', hcconh.axes))
+    
+    for ssid, ss in proj.spinsystems.items():
+        for name, nid in ss.pkids:
+            if name != 'nhsqc':
+                continue
+            for (cid, cpk) in hcconh.peaks.items():
+                nhsqc_n, nhsqc_h = map(shf, nhsqc.peaks[nid].dims)
+                hcconh_h, hcconh_n, hcconh_other_h = map(shf, cpk.dims)
+                if abs(nhsqc_n - hcconh_n) <= NTOL and abs(nhsqc_h - hcconh_h) <= HTOL:
+                    ss.pkids.append(['hcconh', cid])
+                    print ssid, cid, nhsqc_n, nhsqc_h, hcconh_n, hcconh_h
+        
+    pt.json_out(ROOT + "new_project2.txt", proj)
+
+
+def loadHbhaconh():
+    """
+    Project -> IO Spectrum
+    """
+    proj = getData(simple=False)
+    xs = pt.xeasy_in('oops', {'hbhaconh': ROOT + "hbhaconh.xez"})
+    proj.spectra['hbhaconh'] = xs.spectra['hbhaconh']
+    pt.json_out(ROOT + "again_mew.txt", proj)
+
+
+def groupHbhaconhPeaksIntoSpinSystems(HTOL=0.025, NTOL=0.2):
+    proj = getData(simple=False)
+    nhsqc, hbhaconh = proj.spectra['nhsqc'], proj.spectra['hbhaconh']
+    
+    shf = lambda x: x.shift
+    
+    print hbhaconh.axes, nhsqc.axes
+    if hbhaconh.axes != ['H', 'N', 'h']:
+        raise ValueError(('oops, axis order', hbhaconh.axes))
+    
+    for ssid, ss in proj.spinsystems.items():
+        for name, nid in ss.pkids:
+            if name != 'nhsqc':
+                continue
+            for (cid, cpk) in hbhaconh.peaks.items():
+                nhsqc_n, nhsqc_h = map(shf, nhsqc.peaks[nid].dims)
+                hbhaconh_h, hbhaconh_n, hbhaconh_other_h = map(shf, cpk.dims)
+                if abs(nhsqc_n - hbhaconh_n) <= NTOL and abs(nhsqc_h - hbhaconh_h) <= HTOL:
+                    ss.pkids.append(['hbhaconh', cid])
+                    print ssid, cid, nhsqc_n, nhsqc_h, hbhaconh_n, hbhaconh_h
+        
+    pt.json_out(ROOT + "new_project2.txt", proj)
+
+
+def getSSPeaks(ssid, *specnames):
+    """
+    If no spectra names given, return all peaks of the specified SS.
+    Otherwise, return only the peaks with names in specnames.
+    """
+    ss = getData()._spinsystems[ssid]
+    pkids = ss.pkids
+    if len(specnames) == 0:
+        return pkids
+    return [(name, pkid) for (name, pkid) in pkids if name in specnames]
+
+
+## ANALYSIS !!!
+
+def addPeakTag(proj, specname, pkid, *tags):
+    for tag in tags:
+        proj.spectra[specname].peaks[pkid].tags.append(tag)
+    return proj
+
+
+def createNewPeak(proj, specname, shifts, height):
+    spec = proj[specname]
+    pkid = max(spec.peaks.keys()) + 1
+    spec.peaks[pkid] = Peak([PeakDim(s, []) for s in shifts], [], height)
+    return proj
+
+
+def addPeakDimTag(proj, specname, pkid, dimNo, *tags):
+    for tag in tags:
+        proj.spectra[specname].peaks[pkid].dims[dimNo].tags.append(tag)
+    return proj
+
+
+def removePeak(proj, ssid, specname, pkid):
+    ss = proj.spinsystems[ssid]
+    if not [specname, pkid] in ss.pkids:
+        raise ValueError('unable to remove peak from spin system: not found')
+    ss.pkids = filter(lambda x: x != [specname, pkid], ss.pkids)
+    return proj
+
+
+def addPeak(proj, ssid, specname, pkid):
+    ss = proj.spinsystems[ssid]
+    if [specname, pkid] in ss.pkids:
+        raise ValueError('unable to add peak to spin system: already present')
+    ss.pkids.append([specname, pkid])
+    return proj
 
 
 if __name__ == "__main__":
