@@ -849,39 +849,77 @@ def getSSPeaks(ssid, *specnames):
 
 ## ANALYSIS !!!
 
-def addPeakTag(proj, specname, pkid, *tags):
-    for tag in tags:
-        proj.spectra[specname].peaks[pkid].tags.append(tag)
-    return proj
+class Analysis(object):
+    
+    def __init__(self):
+        self.data = getData(simple=False)
+    
+    def save(self, path=None):
+        if path is None:
+            savePath = ROOT + 'auto_project.txt'
+        else:
+            savePath = ROOT + path
+        pt.json_out(savePath, self.data)
+    
+    def addPeakTag(self, specname, tag, *pkids):
+        for pkid in pkids:
+            peak = self.data.spectra[specname].peaks[pkid]
+            if tag in peak.tags:
+                raise ValueError('cannot add peak tag, already present')
+            peak.tags.append(tag)
+    
+    def createNewPeak(self, specname, shifts, height):
+        spec = self.data.spectra[specname]
+        pkid = max(spec.peaks.keys()) + 1
+        spec.addPeak(pkid, model.Peak([model.PeakDim(s, []) for s in shifts], [], height))
+        return pkid
+    
+    def addPeakToSS(self, ssid, specname, *pkids):
+        proj = self.data
+        for pkid in pkids:
+            ss = proj.spinsystems[ssid]
+            if [specname, pkid] in ss.pkids:
+                raise ValueError('unable to add peak to spin system: already present')
+            if specname not in proj.spectra:
+                raise ValueError('unrecognized spectrum')
+            if pkid not in proj.spectra[specname].peaks:
+                raise ValueError('invalid peak id')
+            ss.pkids.append([specname, pkid])
+    
+    def addPeakDimAtomType(self, specname, dimNo, *pairs):
+        peaks = self.data.spectra[specname].peaks
+        for (pkid, atomtypes) in pairs:
+            dim = peaks[pkid].dims[dimNo]
+            for atom in atomtypes:
+                if atom in dim.atomtypes:
+                    raise ValueError(('cannot add atomtype: already present', atomtypes, peaks[pkid]))
+                dim.atomtypes.append(atom)
+    
+    def removePeakFromSS(self, ssid, specname, *pkids):
+        ss = self.data.spinsystems[ssid]
+        for pkid in pkids:
+            if not [specname, pkid] in ss.pkids:
+                raise ValueError('unable to remove peak from spin system: not found')
+            ss.pkids = filter(lambda x: x != [specname, pkid], ss.pkids)
 
-
-def createNewPeak(proj, specname, shifts, height):
-    spec = proj[specname]
-    pkid = max(spec.peaks.keys()) + 1
-    spec.peaks[pkid] = Peak([PeakDim(s, []) for s in shifts], [], height)
-    return proj
-
-
-def addPeakDimTag(proj, specname, pkid, dimNo, *tags):
-    for tag in tags:
-        proj.spectra[specname].peaks[pkid].dims[dimNo].tags.append(tag)
-    return proj
-
-
-def removePeak(proj, ssid, specname, pkid):
-    ss = proj.spinsystems[ssid]
-    if not [specname, pkid] in ss.pkids:
-        raise ValueError('unable to remove peak from spin system: not found')
-    ss.pkids = filter(lambda x: x != [specname, pkid], ss.pkids)
-    return proj
-
-
-def addPeak(proj, ssid, specname, pkid):
-    ss = proj.spinsystems[ssid]
-    if [specname, pkid] in ss.pkids:
-        raise ValueError('unable to add peak to spin system: already present')
-    ss.pkids.append([specname, pkid])
-    return proj
+    def assign_HBHACONH_HCCONH_SS(self, ssid, hbhaconh_bad, hbhaconh_new, hcconh_bad, hcconh_new):
+        """
+        still have to assign atomtypes to peak ids on my own
+        """
+        self.removePeakFromSS(ssid, 'hbhaconh', *hbhaconh_bad)
+        self.addPeakTag('hbhaconh', 'artifact', *hbhaconh_bad)
+        self.removePeakFromSS(ssid, 'hcconh', *hcconh_bad)
+        self.addPeakTag('hcconh', 'artifact', *hcconh_bad)
+        ids, zzz = [], [] # wow, what a horrible variable name
+        for x in hbhaconh_new:
+            newid = self.createNewPeak('hbhaconh', x[0], x[1])
+            ids.append(newid)
+        for y in hcconh_new:
+            newid = self.createNewPeak('hcconh', y[0], y[1])
+            zzz.append(newid)
+        self.addPeakToSS(ssid, 'hbhaconh', *ids)
+        self.addPeakToSS(ssid, 'hcconh', *zzz)
+        return (ids, zzz)
 
 
 if __name__ == "__main__":

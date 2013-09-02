@@ -74,15 +74,21 @@ class Spectrum(MyBase):
     '''
     
     def __init__(self, axes, peaks):
-        for (pkid, pk) in peaks.iteritems():
-            if not isinstance(pkid, int):
-                raise TypeError(('peak id', pkid))
-            if not isinstance(pk, Peak):
-                raise TypeError(('peak', pk))
-            if len(pk.dims) != len(axes):
-                raise ValueError('peak dimensions must match spectral axes')
+        self.peaks = {}
         self.axes = axes
-        self.peaks = peaks
+        for (pkid, pk) in peaks.iteritems():
+            self.addPeak(pkid, pk)
+    
+    def addPeak(self, pkid, peak):
+        if not isinstance(pkid, int):
+            raise TypeError(('peak id', pkid))
+        if not isinstance(peak, Peak):
+            raise TypeError(('peak', peak))
+        if len(peak.dims) != len(self.axes):
+            raise ValueError(('peak dimensions must match spectral axes', peak.dims, self.axes))
+        if pkid in self.peaks:
+            raise ValueError('cannot add peak to spectrum: id already in use')
+        self.peaks[pkid] = peak
     
 
 class Molecule(MyBase):
