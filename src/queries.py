@@ -689,6 +689,93 @@ def getShifts():
     return things
 
 
+def getResidueShifts():
+    def getI(specname, atomtypes, dimname, pktags):
+        if (specname, dimname) == ('hncacb', 'C'):
+            if 'i-1' in pktags and 'i' in pktags:
+                return 'both'
+            elif 'i-1' in pktags:
+                return 'i-1'
+            elif 'i' in pktags:
+                return 'i'
+            else:
+                return None
+        if specname == 'hcchtocsy':
+            return 'i-1'
+        if (specname, dimname) == ('cconh', 'C'):
+            return 'i-1'
+        if (specname, dimname) == ('hcconh', 'h'):
+            return 'i-1'
+        if (specname, dimname) == ('hbhaconh', 'h'):
+            return 'i-1'
+        # what about: cb_he, cb_hd ?? may have them assigned to wrong spin systems
+        return 'i' # nhsqc, hnco
+            
+    ats = {
+        ('nhsqc', 'N'): ('N'),
+        ('nhsqc', 'H'): ('H'),
+        ('hncacb', 'N'): ('N'),
+        ('hncacb', 'H'): ('H'),
+        ('hnco', 'N'): ('N'),
+        ('hnco', 'H'): ('H'),
+        ('hnco', 'C'): ('CO'),
+        ('cconh', 'N'): ('N'),
+        ('cconh', 'H'): ('H'),
+        ('hcconh', 'N'): ('N'),
+        ('hcconh', 'H'): ('H'),
+        ('hbhaconh', 'N'): ('N'),
+        ('hbhaconh', 'H'): ('H'),
+    }
+    def getAt(specname, atomtypes, dimname):
+        if len(atomtypes) > 0:
+            return tuple(atomtypes)
+        if (specname, dimname) in ats:
+            return ats[(specname, dimname)]
+    # 1. get residue-SS assignment
+    proj = getData()
+    import collections
+    res = dict((i, collections.defaultdict(lambda: [])) for (i, _) in enumerate(proj.molecule.residues, start=1))
+    asses = {}
+    for s in proj.getSpinSystems():
+        if len(s.residueids) == 0:
+            continue
+        if len(s.residueids) != 1:
+            raise ValueError('unexpected number of residues assigned to spin system -- %s' % str(s.residueids))
+        asses[s.id] = s.residueids[0]
+    print asses, '\n\n', res
+#    return 0
+    # 2. get SS peaks
+    for ss in proj.getSpinSystems():
+        if ss.id not in asses:
+            continue
+        for (specname, pkid) in ss.pkids:
+            peak = proj._spectra[specname]._peaks[pkid]
+            for d, dimname in zip(peak.dims, proj._spectra[specname].axes):
+                try:
+                    pos = getI(specname, d[1], dimname, peak.tags)
+                except:
+                    print peak
+                    raise
+                atoms = getAt(specname, d[1], dimname)
+                record = (specname, d[0])
+                if pos == 'i':
+                    res[asses[ss.id]    ][atoms].append(record)
+                elif pos == 'i-1':
+                    res[asses[ss.id] - 1][atoms].append(record)
+                elif pos == 'both':
+                    res[asses[ss.id]    ][atoms].append(record)
+                    res[asses[ss.id] - 1][atoms].append(record)
+                elif pos is None:
+                    pass
+                else:
+                    raise ValueError('invalid')
+    return model.fmap_dict(dict, res)
+    # 3. get residue peaks
+    # 4. use i/i-1 experiment knowledge, plus backbone/sidechain tags and aatype, to convert peaks to correct residue
+    # 5. since we'll have multiple measurements for each atom, figure out some way to collapse the list to a single value
+    # 6. for each peak: atomname, spectrum name, shift
+
+
 def loadCCONH():
     """
     Project -> IO Spectrum
@@ -845,6 +932,74 @@ def getSSPeaks(ssid, *specnames):
     if len(specnames) == 0:
         return pkids
     return [(name, pkid) for (name, pkid) in pkids if name in specnames]
+
+
+def loadAromaticLinks():
+    """
+    Project -> IO Spectrum
+    """
+    proj = getData(simple=False)
+    xs = pt.xeasy_in('oops', {'cb_he': ROOT + "hbCBcgcdceHE.txt", 
+                              'cb_hd': ROOT + "hbCBcgcdHD.txt"})
+    proj.spectra['cb_he'] = xs.spectra['cb_he']
+    proj.spectra['cb_hd'] = xs.spectra['cb_hd']
+    pt.json_out(ROOT + "again_its_new.txt", proj)
+
+
+def retagAromaticPeaks():
+    proj = getData(simple=False)
+    for pk in proj.spectra['cb_hd'].peaks.values():
+        pk.dims[0].atomtypes.append('CB')
+        pk.dims[1].atomtypes.append('HD*')
+    for pk in proj.spectra['cb_he'].peaks.values():
+        pk.dims[0].atomtypes.append('CB')
+        pk.dims[1].atomtypes.append('HE*')
+    pt.json_out(ROOT + "again_were_new.txt", proj)
+
+
+def loadHCCHTocsy():
+    trans = {
+        ('HA',)             : ['CA'], 
+        ('HA', 'HB')        : ['CA'],
+        ('HA2', 'HA3')      : ['CA'],
+        ('HB',)             : ['CB'],
+        ('HB2', 'HB3')      : ['CB'],
+        ('HD1',)            : ['CD1'],
+        ('HD1', 'HD2')      : ['CD1', 'CD2'],
+        ('HD2', 'HD3')      : ['CD'],
+        ('HE2', 'HE3')      : ['CE'],
+        ('HG',)             : ['CG'],
+        ('HG', 'HD1', 'HD2'): ['CG', 'CD1', 'CD2'],
+        ('HG1', 'HG2')      : ['CG1', 'CG2'],
+        ('HG12', 'HG13')    : ['CG1', 'CG2'],
+        ('HG2',)            : ['CG2'],
+        ('HG2', 'HG3')      : ['CG']
+    }
+    proj = getData(simple=False)
+    xs = pt.xeasy_in('?', {'hcchtocsy': ROOT + 'hcchtocsy.xez'})
+    proj.spectra['hcchtocsy'] = xs.spectra['hcchtocsy']
+    with open(ROOT + 'hcch_tocsy_atomtypes.txt') as infile:
+        atomtypes = eval(infile.read())
+    um = {}
+    import collections
+    seen = collections.defaultdict(lambda: 0)
+    for (ssid, assns) in atomtypes.iteritems():
+        for (peak_id, atoms) in assns:
+            seen[peak_id] += 1
+            # 1. add ('hcchtocsy', $peak_id$) to the appropriate spin systems' peaks
+            proj.spinsystems[ssid].pkids.append(['hcchtocsy', peak_id])
+            # 2. assign the 1H dimensions of the peak
+            peak = proj.spectra['hcchtocsy'].peaks[peak_id]
+            peak.dims[0].atomtypes = atoms + ['i-1']
+            peak.dims[2].atomtypes = atoms + ['i-1']
+            # 3. translate the 1H assignments to 13C assignments, and assign those to the C-dimension
+            peak.dims[1].atomtypes = trans[tuple(atoms)] + ['i-1']
+    pt.json_out(ROOT + "incomplete.txt", proj)
+    return seen
+    # the peaks look fine (they're all on the diagonal)
+#    for pk in xs.spectra['hcchtocsy'].peaks.values():
+#        if abs(pk.dims[0].shift - pk.dims[2].shift) > 0.02:
+#            print 'oops: ', pk
 
 
 ## ANALYSIS !!!
