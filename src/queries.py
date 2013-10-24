@@ -712,25 +712,28 @@ def getResidueShifts():
         return 'i' # nhsqc, hnco
             
     ats = {
-        ('nhsqc', 'N'): ('N'),
-        ('nhsqc', 'H'): ('H'),
-        ('hncacb', 'N'): ('N'),
-        ('hncacb', 'H'): ('H'),
-        ('hnco', 'N'): ('N'),
-        ('hnco', 'H'): ('H'),
-        ('hnco', 'C'): ('CO'),
-        ('cconh', 'N'): ('N'),
-        ('cconh', 'H'): ('H'),
-        ('hcconh', 'N'): ('N'),
-        ('hcconh', 'H'): ('H'),
-        ('hbhaconh', 'N'): ('N'),
-        ('hbhaconh', 'H'): ('H'),
+        ('nhsqc',    'N'): ('N',),
+        ('nhsqc',    'H'): ('H',),
+        ('hncacb',   'N'): ('N',),
+        ('hncacb',   'H'): ('H',),
+        ('hnco',     'N'): ('N',),
+        ('hnco',     'H'): ('H',),
+        ('hnco',     'C'): ('C',),
+        ('cconh',    'N'): ('N',),
+        ('cconh',    'H'): ('H',),
+        ('hcconh',   'N'): ('N',),
+        ('hcconh',   'H'): ('H',),
+        ('hbhaconh', 'N'): ('N',),
+        ('hbhaconh', 'H'): ('H',),
     }
     def getAt(specname, atomtypes, dimname):
         if len(atomtypes) > 0:
             return tuple(atomtypes)
         if (specname, dimname) in ats:
             return ats[(specname, dimname)]
+        # what if neither branch is hit ??????????????????????????
+        print 'uh-oh, unassigned atom type: ', specname, atomtypes, dimname
+#        raise ValueError('um ... why did this exception get triggered when figuring out the atomtype name?')
     # 1. get residue-SS assignment
     proj = getData()
     import collections
@@ -756,7 +759,9 @@ def getResidueShifts():
                 except:
                     print peak
                     raise
+                print 'in: ', specname, d[1], dimname
                 atoms = getAt(specname, d[1], dimname)
+                print 'out: ', atoms
                 record = (specname, d[0])
                 if pos == 'i':
                     res[asses[ss.id]    ][atoms].append(record)
@@ -955,6 +960,15 @@ def retagAromaticPeaks():
         pk.dims[0].atomtypes.append('CB')
         pk.dims[1].atomtypes.append('HE*')
     pt.json_out(ROOT + "again_were_new.txt", proj)
+
+
+def removeRedundantHCCHTocsyIMinusOneAtomtypes():
+    proj = getData(simple=False)
+    for pk in proj.spectra['hcchtocsy'].peaks.values():
+        for dim in pk.dims:
+            if 'i-1' in dim.atomtypes:
+                dim.atomtypes.remove('i-1')
+    pt.json_out(ROOT + "again_without_i-1s.txt", proj)
 
 
 def loadHCCHTocsy():
