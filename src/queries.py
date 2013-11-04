@@ -708,23 +708,26 @@ def getResidueShifts():
             return 'i-1'
         if (specname, dimname) == ('hbhaconh', 'h'):
             return 'i-1'
+        if (specname, dimname) == ('hnco', 'C'):
+            return 'i-1'
         # what about: cb_he, cb_hd ?? may have them assigned to wrong spin systems
-        return 'i' # nhsqc, hnco
-            
+        return 'i' # nhsqc
+     
+    # uh-oh ... do I have the HNCO assignments right? that experiment spans residues
     ats = {
         ('nhsqc',    'N'): ('N',),
-        ('nhsqc',    'H'): ('H',),
+        ('nhsqc',    'H'): ('HN',),
         ('hncacb',   'N'): ('N',),
-        ('hncacb',   'H'): ('H',),
+        ('hncacb',   'H'): ('HN',),
         ('hnco',     'N'): ('N',),
-        ('hnco',     'H'): ('H',),
+        ('hnco',     'H'): ('HN',),
         ('hnco',     'C'): ('C',),
         ('cconh',    'N'): ('N',),
-        ('cconh',    'H'): ('H',),
+        ('cconh',    'H'): ('HN',),
         ('hcconh',   'N'): ('N',),
-        ('hcconh',   'H'): ('H',),
+        ('hcconh',   'H'): ('HN',),
         ('hbhaconh', 'N'): ('N',),
-        ('hbhaconh', 'H'): ('H',),
+        ('hbhaconh', 'H'): ('HN',),
     }
     def getAt(specname, atomtypes, dimname):
         if len(atomtypes) > 0:
