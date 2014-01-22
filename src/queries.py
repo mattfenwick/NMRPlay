@@ -6,7 +6,7 @@ from .algebra import ffilter, inner_join, groupBy, split, concatMap, fmap
 from operator import attrgetter
 
 
-ROOT = '../PeakPicker/'
+ROOT = '../PPAbnormal/'
 
 def getData(root=ROOT, simple=True):
     data = pt.json_in(root + 'project.txt')
@@ -762,9 +762,9 @@ def getResidueShifts():
                 except:
                     print peak
                     raise
-                print 'in: ', specname, d[1], dimname
+                #print 'in: ', specname, d[1], dimname
                 atoms = getAt(specname, d[1], dimname)
-                print 'out: ', atoms
+                #print 'out: ', atoms
                 record = (specname, d[0])
                 if pos == 'i':
                     res[asses[ss.id]    ][atoms].append(record)
@@ -782,6 +782,79 @@ def getResidueShifts():
     # 4. use i/i-1 experiment knowledge, plus backbone/sidechain tags and aatype, to convert peaks to correct residue
     # 5. since we'll have multiple measurements for each atom, figure out some way to collapse the list to a single value
     # 6. for each peak: atomname, spectrum name, shift
+
+
+def getCyanaShifts():
+    translate = {
+        None: None, # exception or something?
+        ('C',):             ('C'),
+        (u'CA',):           ('CA'),
+        (u'CA', u'CB'):     ('CA', 'CB'),
+        (u'CB',):           ('CB'),
+        (u'CB', u'CG'):     ('CB', 'CG'),
+        (u'CD',):           ('CD'),
+        (u'CD1',):          ('CD1'),
+        (u'CD1', u'CD2'):   ('CD1', 'CD2'),
+        (u'CE',):           ('CE'),
+        (u'CG',):           ('CG'),
+        (u'CG', u'CD1', u'CD2'):            ('CG', 'CD1', 'CD2'),
+        (u'CG1',):                          ('CG1'),
+        (u'CG1', u'CG2'):                   ('CG1', 'CG2'),
+        (u'CG2',):                          ('CG2'),
+        (u'HA',):                           ('HA'),
+        (u'HA', u'HB'):                     ('HA', 'HB'),
+        (u'HA', u'HB2', u'HB3'):            ('HA', 'QB'),
+        (u'HA2', u'HA3'):                   ('QA'),
+        (u'HA3', u'HA2'):                   ('QA'),
+        (u'HB',):                           ('HB'),
+        (u'HB2', u'HB3'):                   ('QB'),
+        (u'HB2', u'HB3', u'HD2', u'HD3'):   ('QB', 'QD'),
+        (u'HB2', u'HB3', u'HG'):            ('QB', 'HG'),
+        (u'HB2', u'HB3', u'HG2', u'HG3'):   ('QB', 'QG'),
+        (u'HD1',):                          ('HD1'),
+        (u'HD1', u'HD2'):                   ('QD'),
+        (u'HD1', u'HG2'):                   ('HD1', 'HG2'),
+        (u'HD2',):                          ('HD2'),
+        (u'HD2', u'HD3'):                   ('QD'), #  whoa -- both hd1/hd2 and hd2/hd3 turn into qd
+        (u'HE2', u'HE3'):                   ('QE'),
+        (u'HG',):                           ('HG'),
+        (u'HG', u'HD1', u'HD2'):            ('HG', 'QD'),
+        (u'HG1', u'HG2'):                   ('QG'),
+        (u'HG12', u'HG13'):                 ('QG1'),
+        (u'HG2',):                          ('HG2'),
+        (u'HG2', u'HG1'):   ('QG'),
+        (u'HG2', u'HG3'):   ('QG'),
+        ('HN',):            ('HN'),
+        ('N',):             ('N'),
+        (u'QD',):           ('QD'),
+        (u'QE',):           ('QE')
+    }
+
+    shifts = getResidueShifts()
+    ats = {}
+    cyana = {}
+    for (ssid, atoms) in shifts.items():
+        res = {}
+        for (atomtypes, cs) in atoms.items():
+            ats[atomtypes] = (ats[atomtypes] + 1) if ats.has_key(atomtypes) else 1
+            if atomtypes is None:
+                continue
+            for at in atomtypes:
+                if not res.has_key(at):
+                    res[at] = []
+                res[at].extend(cs)
+        cyana[ssid] = res
+    return cyana
+
+
+def selectBestShift():
+    shifts = getCyanaShifts()
+    for (ssid, cs) in shifts.items():
+        for (atom, shs) in cs.items():
+            vals = [y for (x, y) in shs]
+            mx, mn, av = max(vals), min(vals), sum(vals) * 1.0 / len(vals)
+            if (mx / av) > 1.05 or (mn / av) < 0.95:
+                print mx, mn, av, vals
 
 
 def loadCCONH():
