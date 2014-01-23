@@ -849,12 +849,25 @@ def getCyanaShifts():
 
 def selectBestShift():
     shifts = getCyanaShifts()
-    for (ssid, cs) in shifts.items():
+    final = []
+    count = 1
+    for (resid, cs) in shifts.items():
         for (atom, shs) in cs.items():
-            vals = [y for (x, y) in shs]
-            mx, mn, av = max(vals), min(vals), sum(vals) * 1.0 / len(vals)
-            if (mx / av) > 1.05 or (mn / av) < 0.95:
-                print mx, mn, av, vals
+            vals = [y for (_, y) in shs]
+            shf = sum(vals) * 1.0 / len(vals)
+            final.append([count, shf, atom, resid])
+            count += 1
+#            mx, mn, av = max(vals), min(vals), sum(vals) * 1.0 / len(vals)
+#            if (mx - av) > 3.5 or (av - mn) > 3.5:
+#                print resid, atom, mx, mn, av, vals
+    return final
+
+
+def printXEasyShifts():
+    shifts = selectBestShift()
+    for (num, shf, atom, resid) in shifts:
+        print '{:4} {:7.3f} {:7} {:4} {:3}'.format(num, shf, '0.000', atom, resid)
+
 
 
 def loadCCONH():
