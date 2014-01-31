@@ -869,9 +869,9 @@ def selectBestShift():
             shf = sum(vals) * 1.0 / len(vals)
             final.append([count, shf, atom, resid])
             count += 1
-#            mx, mn, av = max(vals), min(vals), sum(vals) * 1.0 / len(vals)
-#            if (mx - av) > 3.5 or (av - mn) > 3.5:
-#                print resid, atom, mx, mn, av, vals
+            mx, mn, av = max(vals), min(vals), sum(vals) * 1.0 / len(vals)
+            if (mx - av) > 0.2 or (av - mn) > 0.2:
+                print resid, atom, mx, mn, av, vals
     return final
 
 
@@ -879,6 +879,18 @@ def printXEasyShifts():
     shifts = selectBestShift()
     for (num, shf, atom, resid) in shifts:
         print '{:4} {:7.3f} {:7} {:4} {:3}'.format(num, shf, '0.000', atom, resid)
+
+
+def setAtomType(specname, peakid, dimno, atomtypes=None):
+    proj = getData(simple=False)
+    if atomtypes is not None:
+        old = proj.spectra[specname].peaks[peakid].dims[dimno].atomtypes
+        proj.spectra[specname].peaks[peakid].dims[dimno].atomtypes = atomtypes 
+        pt.json_out(ROOT + "project.txt", proj)
+        print 'old value:', old
+    else:
+        print proj.spectra[specname].peaks[peakid].dims[dimno].atomtypes
+#    return proj
 
 
 
@@ -1033,11 +1045,17 @@ def getSSPeaks(ssid, *specnames):
     If no spectra names given, return all peaks of the specified SS.
     Otherwise, return only the peaks with names in specnames.
     """
-    ss = getData()._spinsystems[ssid]
+    my_data = getData()
+    ss = my_data._spinsystems[ssid]
     pkids = ss.pkids
-    if len(specnames) == 0:
-        return pkids
-    return [(name, pkid) for (name, pkid) in pkids if name in specnames]
+    def include(name):
+        if len(specnames) == 0:
+            return True
+        return name in specnames
+    def getAts(s_name, pk_id):
+#        return [dim for dim in my_data._spectra[s_name]._peaks[pk_id].dims]
+        return my_data._spectra[s_name]._peaks[pk_id]
+    return [(name, pkid, getAts(name, pkid)) for (name, pkid) in pkids if include(name)]
 
 
 def loadAromaticLinks():
