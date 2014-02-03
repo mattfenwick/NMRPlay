@@ -703,7 +703,7 @@ def getResidueShifts():
         if specname == 'hcchtocsy':
             return 'i-1'
         if (specname, dimname) == ('cconh', 'C'):
-            print pktags
+#            print pktags
             return 'i-1'
         if (specname, dimname) == ('hcconh', 'h'):
             return 'i-1'
@@ -736,7 +736,7 @@ def getResidueShifts():
         if (specname, dimname) in ats:
             return ats[(specname, dimname)]
         # what if neither branch is hit ??????????????????????????
-        print 'uh-oh, unassigned atom type: ', specname, atomtypes, dimname
+#        print 'uh-oh, unassigned atom type: ', specname, atomtypes, dimname
 #        raise ValueError('um ... why did this exception get triggered when figuring out the atomtype name?')
     # 1. get residue-SS assignment
     proj = getData()
@@ -749,13 +749,13 @@ def getResidueShifts():
         if len(s.residueids) != 1:
             raise ValueError('unexpected number of residues assigned to spin system -- %s' % str(s.residueids))
         asses[s.id] = s.residueids[0]
-    print asses, '\n\n', res
+#    print asses, '\n\n', res
 #    return 0
     # 2. get SS peaks
     for ss in proj.getSpinSystems():
         if ss.id not in asses:
             continue
-        print ss.tags
+#        print ss.tags
         for (specname, pkid) in ss.pkids:
             peak = proj._spectra[specname]._peaks[pkid]
             for d, dimname in zip(peak.dims, proj._spectra[specname].axes):
