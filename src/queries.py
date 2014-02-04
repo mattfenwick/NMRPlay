@@ -786,6 +786,31 @@ def getResidueShifts():
     # 6. for each peak: atomname, spectrum name, shift
 
 
+def shiftAnalyzer(resids=range(1, 106 + 1)):
+    shifts = getResidueShifts()
+    sss = getData().getSpinSystems()
+    res2ss = {}
+    for ss in sss:
+        if len(ss.residueids) == 1:
+            res2ss[ss.residueids[0]] = ss.id
+        elif len(ss.residueids) > 1:
+            raise ValueError('oops')
+    for x in resids:
+        if res2ss.has_key(x):
+            print 'peaks for residue', x
+            ssid = res2ss[x]
+            for l in getSSPeaks(ssid):
+                print l
+        else:
+            print 'no peaks for residue', x
+        _d = raw_input('press enter to continue\n')
+        print
+        print len(shifts[x]), 'assigned shifts for residue', x
+        for m in sorted(shifts[x].keys()):
+            print m, shifts[x][m]
+        print '\n'
+
+
 def getCyanaShifts():
     translate = {
         None: None, # exception or something?
