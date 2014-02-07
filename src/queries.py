@@ -689,103 +689,6 @@ def getShifts():
     return things
 
 
-def getResidueShifts():
-    def getI(specname, atomtypes, dimname, pktags):
-        if (specname, dimname) == ('hncacb', 'C'):
-            if 'i-1' in pktags and 'i' in pktags:
-                return 'both'
-            elif 'i-1' in pktags:
-                return 'i-1'
-            elif 'i' in pktags:
-                return 'i'
-            else:
-                return None
-        if specname == 'hcchtocsy':
-            return 'i-1'
-        if (specname, dimname) == ('cconh', 'C'):
-#            print pktags
-            return 'i-1'
-        if (specname, dimname) == ('hcconh', 'h'):
-            return 'i-1'
-        if (specname, dimname) == ('hbhaconh', 'h'):
-            return 'i-1'
-        if (specname, dimname) == ('hnco', 'C'):
-            return 'i-1'
-        # what about: cb_he, cb_hd ?? may have them assigned to wrong spin systems
-        return 'i' # nhsqc
-     
-    # uh-oh ... do I have the HNCO assignments right? that experiment spans residues
-    ats = {
-        ('nhsqc',    'N'): ('N',),
-        ('nhsqc',    'H'): ('HN',),
-        ('hncacb',   'N'): ('N',),
-        ('hncacb',   'H'): ('HN',),
-        ('hnco',     'N'): ('N',),
-        ('hnco',     'H'): ('HN',),
-        ('hnco',     'C'): ('C',),
-        ('cconh',    'N'): ('N',),
-        ('cconh',    'H'): ('HN',),
-        ('hcconh',   'N'): ('N',),
-        ('hcconh',   'H'): ('HN',),
-        ('hbhaconh', 'N'): ('N',),
-        ('hbhaconh', 'H'): ('HN',),
-    }
-    def getAt(specname, atomtypes, dimname):
-        if len(atomtypes) > 0:
-            return tuple(atomtypes)
-        if (specname, dimname) in ats:
-            return ats[(specname, dimname)]
-        # what if neither branch is hit ??????????????????????????
-#        print 'uh-oh, unassigned atom type: ', specname, atomtypes, dimname
-#        raise ValueError('um ... why did this exception get triggered when figuring out the atomtype name?')
-    # 1. get residue-SS assignment
-    proj = getData()
-    import collections
-    res = dict((i, collections.defaultdict(lambda: [])) for (i, _) in enumerate(proj.molecule.residues, start=1))
-    asses = {}
-    for s in proj.getSpinSystems():
-        if len(s.residueids) == 0:
-            continue
-        if len(s.residueids) != 1:
-            raise ValueError('unexpected number of residues assigned to spin system -- %s' % str(s.residueids))
-        asses[s.id] = s.residueids[0]
-#    print asses, '\n\n', res
-#    return 0
-    # 2. get SS peaks
-    for ss in proj.getSpinSystems():
-        if ss.id not in asses:
-            continue
-#        print ss.tags
-        for (specname, pkid) in ss.pkids:
-            peak = proj._spectra[specname]._peaks[pkid]
-            for d, dimname in zip(peak.dims, proj._spectra[specname].axes):
-                try:
-                    pos = getI(specname, d[1], dimname, peak.tags)
-                except:
-                    print peak
-                    raise
-                #print 'in: ', specname, d[1], dimname
-                atoms = getAt(specname, d[1], dimname)
-                #print 'out: ', atoms
-                record = (specname, d[0])
-                if pos == 'i':
-                    res[asses[ss.id]    ][atoms].append(record)
-                elif pos == 'i-1':
-                    res[asses[ss.id] - 1][atoms].append(record)
-                elif pos == 'both':
-                    res[asses[ss.id]    ][atoms].append(record)
-                    res[asses[ss.id] - 1][atoms].append(record)
-                elif pos is None:
-                    pass
-                else:
-                    raise ValueError('invalid')
-    return model.fmap_dict(dict, res)
-    # 3. get residue peaks
-    # 4. use i/i-1 experiment knowledge, plus backbone/sidechain tags and aatype, to convert peaks to correct residue
-    # 5. since we'll have multiple measurements for each atom, figure out some way to collapse the list to a single value
-    # 6. for each peak: atomname, spectrum name, shift
-
-
 def shiftAnalyzer(resids=range(1, 106 + 1)):
     shifts = getResidueShifts()
     sss = getData().getSpinSystems()
@@ -800,7 +703,7 @@ def shiftAnalyzer(resids=range(1, 106 + 1)):
             print 'peaks for residue', x
             ssid = res2ss[x]
             for l in getSSPeaks(ssid):
-                if l[0] == 'cconh':
+                if True: # l[0] == 'cconh':
                     print l
         else:
             print 'no peaks for residue', x
@@ -818,138 +721,132 @@ def moveTagsIntoAtomtypes():
     for ssid in sorted(proj.spinsystems):
         ss = proj.spinsystems[ssid]
         if 'backbone' in ss.tags:
+            if len(ss.residueids) == 0:
+                print 'ss ', ssid, ' unassigned'
+                continue
             print 'doing ss ', ssid
             counts[0] += 1
             pk_cts = [0, set([])]
             for (specname, pkid) in ss.pkids:
                 pk = proj.spectra[specname].peaks[pkid]
                 if specname == 'hnco':
-                    # i: h, n
-                    # i-1: c
-                    pass
+                    pk.dims[0].atomtypes.append('H')
+                    pk.dims[1].atomtypes.append('N')
+                    pk.dims[2].atomtypes.append('C(i-1)')
                 elif specname == 'nhsqc':
-                    # i: h, n
-                    pass
+                    pk.dims[0].atomtypes.append('N')
+                    pk.dims[1].atomtypes.append('H')
                 elif specname == 'hncacb':
-                    # i: h, n
+                    pk.dims[0].atomtypes.append('H')
+                    pk.dims[1].atomtypes.append('N')
+                    ats = pk.dims[2].atomtypes
+                    if ats not in [['CA'], ['CB']]:
+                        raise ValueError('bad atomtypes -- %s %s %s' % (ats, ssid, pkid))
+                    atom, new_ats = ats[0], []
                     if 'i-1' in pk.tags:
-                        # i-1: c
-                        pass
-                    elif 'i' in pk.tags:
-                        # i: c
-                        pass
-                    else:
-                        raise ValueError('hncacb peak -- %s %s %s' % (pk.tags, ssid, pkid))
+                        new_ats.append(atom + '(i-1)')
+                    if 'i' in pk.tags: # not `elif` b/c it can be both i and i-1
+                        new_ats.append(atom)
+                    pk.dims[2].atomtypes = new_ats
                 elif specname == 'hcconh':
-                    # i: h, n
-                    # i-1: aliphatic h
-                    pass
+                    pk.dims[0].atomtypes.append('H')
+                    pk.dims[1].atomtypes.append('N')
+                    pk.dims[2].atomtypes = [('%s(i-1)' % a) for a in pk.dims[2].atomtypes]
                 elif specname == 'hbhaconh':
-                    # i: h, n
-                    # i-1: aliphatic h
-                    pass
+                    pk.dims[0].atomtypes.append('H')
+                    pk.dims[1].atomtypes.append('N')
+                    pk.dims[2].atomtypes = [('%s(i-1)' % a) for a in pk.dims[2].atomtypes]
                 elif specname == 'cconh':
-                    # i: h, n
-                    # i-1: c
-                    pass
+                    pk.dims[0].atomtypes.append('H')
+                    pk.dims[1].atomtypes.append('N')
+                    pk.dims[2].atomtypes = [('%s(i-1)' % a) for a in pk.dims[2].atomtypes]
                 elif specname == 'hcchtocsy':
-                    # i-1: h, c, h
-                    pass
-                elif specname == 'hbCBcgcdHD':
-                    # i-1: cb, aromatic h
-                    pass
-                elif specname == 'hbCBcgcdceHE':
-                    # i-1: cb, aromatic h
-                    pass
+                    pk.dims[0].atomtypes = [('%s(i-1)' % a) for a in pk.dims[0].atomtypes]
+                    pk.dims[1].atomtypes = [('%s(i-1)' % b) for b in pk.dims[1].atomtypes]
+                    pk.dims[2].atomtypes = [('%s(i-1)' % c) for c in pk.dims[2].atomtypes]
+                elif specname == 'cb_hd': # 'hbCBcgcdHD':
+                     pass
+#                    pk.dims[0].atomtypes = [('%s(i-1)' % a) for a in pk.dims[0].atomtypes]
+#                    pk.dims[1].atomtypes = [('%s(i-1)' % b) for b in pk.dims[1].atomtypes]
+                elif specname == 'cb_he': # 'hbCBcgcdceHE':
+                     pass
+#                    pk.dims[0].atomtypes = [('%s(i-1)' % a) for a in pk.dims[0].atomtypes]
+#                    pk.dims[1].atomtypes = [('%s(i-1)' % b) for b in pk.dims[1].atomtypes]
                 else:
-                    raise 'problem -- invalid spectrum name'
-            print 'peak counts: ', pk_cts
+                    raise ValueError('invalid spectrum name -- %s' % specname)
+                print pk
+            # print 'peak counts: ', pk_cts
         else:
             print 'not bothering with: ', ssid, '(', ss.tags, ')'
             counts[1] += 1
     print 'yeses, nos: ', counts
+    pt.json_out(ROOT + "project2.txt", proj)
 
 
-def getCyanaShifts():
-    translate = {
-        None: None, # exception or something?
-        (u'C',):            ['C'],
-        (u'CA',):           ['CA'],
-        (u'CA', u'CB'):     ['CA', 'CB'],
-        (u'CB',):           ['CB'],
-        (u'CB', u'CG'):     ['CB', 'CG'],
-        (u'CD',):           ['CD'],
-        (u'CD1',):          ['CD1'],
-        (u'CD1', u'CD2'):   ['CD1', 'CD2'],
-        (u'CE',):           ['CE'],
-        (u'CG',):           ['CG'],
-        (u'CG', u'CD1', u'CD2'):            ['CG', 'CD1', 'CD2'],
-        (u'CG1',):                          ['CG1'],
-        (u'CG1', u'CG2'):                   ['CG1', 'CG2'],
-        (u'CG2',):                          ['CG2'],
-        (u'HA',):                           ['HA'],
-        (u'HA', u'HB'):                     ['HA', 'HB'],
-        (u'HA', u'HB2', u'HB3'):            ['HA', 'QB'],
-        (u'HA2', u'HA3'):                   ['QA'],
-        (u'HA3', u'HA2'):                   ['QA'],
-        (u'HB',):                           ['HB'],
-        (u'HB2', u'HB3'):                   ['QB'],
-        (u'HB2', u'HB3', u'HD2', u'HD3'):   ['QB', 'QD'],
-        (u'HB2', u'HB3', u'HG'):            ['QB', 'HG'],
-        (u'HB2', u'HB3', u'HG2', u'HG3'):   ['QB', 'QG'],
-        (u'HD1',):                          ['HD1'],
-        (u'HD1', u'HD2'):                   ['QD'],
-        (u'HD1', u'HG2'):                   ['HD1', 'HG2'],
-        (u'HD2',):                          ['HD2'],
-        (u'HD2', u'HD3'):                   ['QD'], #  whoa -- both hd1/hd2 and hd2/hd3 turn into qd
-        (u'HE2', u'HE3'):                   ['QE'],
-        (u'HG',):                           ['HG'],
-        (u'HG', u'HD1', u'HD2'):            ['HG', 'QD'],
-        (u'HG1', u'HG2'):                   ['QG'],
-        (u'HG12', u'HG13'):                 ['QG1'],
-        (u'HG2',):                          ['HG2'],
-        (u'HG2', u'HG1'):   ['QG'],
-        (u'HG2', u'HG3'):   ['QG'],
-        (u'HN',):           ['H'],
-        (u'N',):            ['N'],
-        (u'QD',):           ['QD'],
-        (u'QE',):           ['QE'],
-        (u'QG2', u'QD1'):   ['QG2', 'QD1'],
-        (u'QG2',):          ['QG2'],
-        (u'QD1', u'QD2'):   ['QQD'],
-        (u'QD1', u'QG2'):   ['QD1', 'QG2'],
-        (u'QG1', u'QG2'):   ['QQG'],
-        (u'QA',):           ['QA'],
-        (u'QB',):           ['QB'],
-        (u'QD1',):          ['QD1'],
-        (u'QG1',):               ['QG1'],
-        (u'HG', u'QD1', u'QD2'): ['HG', 'QQD']
-    }
+def checkAtomtypes():
+    proj = getData()
+    for ss in proj.getSpinSystems():
+        if not 'backbone' in ss.tags:
+            print 'skipping -- not backbone -- ', ss.id, ss.tags
+            continue
+        if len(ss.residueids) == 0:
+            print 'skipping -- no residue assignment -- ', ss.id
+            continue
+        for (specname, pkid) in ss.pkids:
+            pk = proj._spectra[specname]._peaks[pkid]
+            for (_, ats) in pk.dims:
+                if len(ats) == 0:
+                    print ('poopy missing atomtype assignments -- %s %s %s' % (ss.tags, ss.id, pk))
+                elif len(ats) > 1:
+                    print 'lots!: ', ss.id, pk
 
-    shifts = getResidueShifts()
-    ats = {} # just a counter
-    cyana = {}
-    for (ssid, atoms) in shifts.items():
-        res = {}
-        for (atomtypes, cs) in atoms.items():
-            ats[atomtypes] = (ats[atomtypes] + 1) if ats.has_key(atomtypes) else 1
-            if atomtypes is None:
-                continue
-            for at in translate[atomtypes]:
-                if not res.has_key(at):
-                    res[at] = []
-                res[at].extend(cs)
-        cyana[ssid] = res
-    return cyana
+
+def removeIndexTags():
+    proj = getData(simple=False)
+    for ssid in sorted(proj.spinsystems):
+        ss = proj.spinsystems[ssid]
+        for (specname, pkid) in ss.pkids:
+            pk = proj.spectra[specname].peaks[pkid]
+            if 'i' in pk.tags: pk.tags.remove('i')
+            if 'i-1' in pk.tags: pk.tags.remove('i-1')
+    pt.json_out(ROOT + "project2.txt", proj)
+    
+
+
+def getResidueShifts():
+    proj = getData()
+    shifts = dict([(i, {}) for i in range(1, 106 + 1)])
+    def add(n, a, sh):
+        if not shifts[n].has_key(a):
+            shifts[n][a] = []
+        shifts[n][a].append(sh)
+    for ss in proj.getSpinSystems():
+        if not 'backbone' in ss.tags:
+            print 'skipping -- not backbone -- ', ss.id, ss.tags
+            continue
+        if len(ss.residueids) == 0:
+            print 'skipping -- no residue assignment -- ', ss.id
+            continue
+        resid = ss.residueids[0]
+        for (specname, pkid) in ss.pkids:
+            pk = proj._spectra[specname]._peaks[pkid]
+            for (sh, ats) in pk.dims:
+                for a in ats:
+                    datum = (specname, pk.id, sh) 
+                    if a[-5:] == '(i-1)':
+                        add(resid - 1, a[:-5], datum)
+                    else:
+                        add(resid, a, datum)
+    return shifts
 
 
 def selectBestShift():
-    shifts = getCyanaShifts()
+    shifts = getResidueShifts()
     final = []
     count = 1
     for (resid, cs) in shifts.items():
         for (atom, shs) in cs.items():
-            vals = [y for (_, y) in shs]
+            vals = [y for (_1, _2, y) in shs]
             shf = sum(vals) * 1.0 / len(vals)
             final.append([count, shf, atom, resid])
             count += 1
