@@ -800,7 +800,8 @@ def shiftAnalyzer(resids=range(1, 106 + 1)):
             print 'peaks for residue', x
             ssid = res2ss[x]
             for l in getSSPeaks(ssid):
-                print l
+                if l[0] == 'cconh':
+                    print l
         else:
             print 'no peaks for residue', x
         _d = raw_input('press enter to continue\n')
@@ -809,6 +810,64 @@ def shiftAnalyzer(resids=range(1, 106 + 1)):
         for m in sorted(shifts[x].keys()):
             print m, shifts[x][m]
         print '\n'
+
+
+def moveTagsIntoAtomtypes():
+    proj = getData(simple=False)
+    counts = [0, 0]
+    for ssid in sorted(proj.spinsystems):
+        ss = proj.spinsystems[ssid]
+        if 'backbone' in ss.tags:
+            print 'doing ss ', ssid
+            counts[0] += 1
+            pk_cts = [0, set([])]
+            for (specname, pkid) in ss.pkids:
+                pk = proj.spectra[specname].peaks[pkid]
+                if specname == 'hnco':
+                    # i: h, n
+                    # i-1: c
+                    pass
+                elif specname == 'nhsqc':
+                    # i: h, n
+                    pass
+                elif specname == 'hncacb':
+                    # i: h, n
+                    if 'i-1' in pk.tags:
+                        # i-1: c
+                        pass
+                    elif 'i' in pk.tags:
+                        # i: c
+                        pass
+                    else:
+                        raise ValueError('hncacb peak -- %s %s %s' % (pk.tags, ssid, pkid))
+                elif specname == 'hcconh':
+                    # i: h, n
+                    # i-1: aliphatic h
+                    pass
+                elif specname == 'hbhaconh':
+                    # i: h, n
+                    # i-1: aliphatic h
+                    pass
+                elif specname == 'cconh':
+                    # i: h, n
+                    # i-1: c
+                    pass
+                elif specname == 'hcchtocsy':
+                    # i-1: h, c, h
+                    pass
+                elif specname == 'hbCBcgcdHD':
+                    # i-1: cb, aromatic h
+                    pass
+                elif specname == 'hbCBcgcdceHE':
+                    # i-1: cb, aromatic h
+                    pass
+                else:
+                    raise 'problem -- invalid spectrum name'
+            print 'peak counts: ', pk_cts
+        else:
+            print 'not bothering with: ', ssid, '(', ss.tags, ')'
+            counts[1] += 1
+    print 'yeses, nos: ', counts
 
 
 def getCyanaShifts():
