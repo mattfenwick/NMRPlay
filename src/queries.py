@@ -669,26 +669,6 @@ def findSequenceAssignments():
 #    return res
 
 
-def getShifts():
-    """
-    this is kind of wrong ... it's only the CA/CB of HNCACB
-    peaks that is i/i-1, the H/N shifts are always i
-    """
-    proj = getData()
-    jed = joined2(proj.getSpinSystems(), getAllPeaks(proj))
-    ged = groupBy(lambda x: x[0].id, jed, snd)
-    # proceed down the spin systems, adding the i peaks,
-    #   then moving to the i-1 peaks
-    atomshifts = fmap(lambda pks: concatMap(lambda pk: map(lambda d: (d, [t for t in pk.tags if t in set(['i', 'i-1'])]), pk.dims), pks), ged)
-    tags = dict(map(lambda x: (x.id, x.tags), proj.getSpinSystems()))
-    for x in tags:
-        if not x in atomshifts:
-            raise ValueError('oops')
-        tags[x] = (tags[x], atomshifts[x])
-    things = fmap(lambda y: (y[0], sorted(map(lambda z: (z[0][0], z[0][1], z[1]), y[1]), key=lambda x:x[0])), tags)
-    return things
-
-
 def shiftAnalyzer(resids=range(1, 106 + 1)):
     shifts = getResidueShifts()
     sss = getData().getSpinSystems()
@@ -840,20 +820,69 @@ def getResidueShifts():
     return shifts
 
 
+def selectOneShift(shifts):
+    """
+    if an atom shows up in multiple peaks, we want to combine those
+    multiple estimates of chemical shift into a single value
+    some spectra are better than others, e.g. HCCH-Tocsy > HCCONH-Tocsy
+    """
+    # use all hcchtocsy peaks if there's any,
+    # otherwise use all peaks
+    hcchtocsy = filter(lambda x: x[0] == 'hcchtocsy', shifts)
+    if len(hcchtocsy) > 0:
+        return avg([v for (_1, _2, v) in hcchtocsy])
+    return avg([u for (_3, _4, u) in shifts])
+
+
+def removeDuplicateAtoms(residues):
+    """
+    if we have both ambiguous-style -- QB -- and unambiguous-style
+    -- HB[2]/HB[3] -- assignments for the same group of atoms, get
+    rid of the QB shift b/c it has less information
+    """
+    dupes = {'QB': ['HB2', 'HB3'],
+             'QG': ['HG2', 'HG3'],
+#             'QQG': ['QG1', 'QG2'],
+             'QD': ['HD2', 'HD3'],
+             'QQD': ['QD1', 'QD2']} # plus others
+    def per_residue(r):
+        new_residue = {}
+        for (atom, data) in r.items():
+            if dupes.has_key(atom) and all([k in r for k in dupes[atom]]):
+                pass
+            else:
+                new_residue[atom] = data
+        return new_residue
+    return model.fmap_dict(per_residue, residues)
+
+
+def disambiguateAtom(atomname):
+    """
+    cyana doesn't care which way a stereospecific assignment goes,
+    just that there are two possibilities and it'll pick one.
+    so get rid of the ambiguity markers: e.g. `HB[2]` -> `HB2`
+    """
+    return filter(lambda x: x not in '[]', atomname)
+            
+
+def avg(vals):
+    return sum(vals) * 1.0 / len(vals)
+
+
 def selectBestShift():
     shifts = getResidueShifts()
-    final = []
-    count = 1
+    best = {}
     for (resid, cs) in shifts.items():
+        residue = {}
         for (atom, shs) in cs.items():
             vals = [y for (_1, _2, y) in shs]
-            shf = sum(vals) * 1.0 / len(vals)
-            final.append([count, shf, atom, resid])
-            count += 1
-            mx, mn, av = max(vals), min(vals), sum(vals) * 1.0 / len(vals)
+            shift = sum(vals) * 1.0 / len(vals)
+            residue[atom] = shift
+            mx, mn, av = max(vals), min(vals), avg(vals)
             if (mx - av) > 0.2 or (av - mn) > 0.2:
                 print resid, atom, mx, mn, av, vals
-    return final
+        best[resid] = residue
+    return best
 
 
 def printXEasyShifts():
