@@ -595,9 +595,11 @@ def getShifts():
 
 
 def printXEasyShifts():
-    shifts = selectBestShift()
-    for (num, shf, atom, resid) in shifts:
-        print '{:4} {:7.3f} {:7} {:4} {:3}'.format(num, shf, '0.000', atom, resid)
+    shifts = getShifts()
+    num = 1
+    for (resid, atom, shf) in shifts:
+        print '{:4} {:7.3f} {:7} {:4} {:3}'.format(num, round(shf, 3), '0.000', atom, resid)
+        num += 1
 
 
 def setAtomType(specname, peakid, dimno, atomtypes=None):

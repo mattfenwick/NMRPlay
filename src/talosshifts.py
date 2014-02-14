@@ -25,27 +25,23 @@ def talos(atoms):
         lines.append(line(*args))
     return '\n'.join(lines)
 
-def calculate_shift(shifts):
-    num = sum([v for (_, v) in shifts])
-    denom = len(shifts)
-    return (num * 1.0) / denom
-
 def talos_shifts():
     """
-    model -> String
+    () -> String
     """
     myShifts = []
-    resShifts = queries.getResidueShifts()
+    shifts = queries.getShifts()
     aatypes = dict(enumerate(queries.getData().molecule.residues, start=1))
-    for key, val in sorted(resShifts.items(), key=lambda x: x[0]):
-        print 'key, val: ', key, val
-        aa = aatypes[key]
-        for atomtypes, shifts in val.items():
-            if atomtypes is None: # a HACK b/c I don't know why there are unassigned shifts in residues
-                continue
-            for atomtype in atomtypes:
-                if not atomtype in set(['HN', 'N', 'CA', 'CB', 'C', 'HA', 'HA2', 'HA3']):
-                    continue # QUESTION:  is the carbonyl-oxygen named 'C' or 'CO'?
-                myShifts.append([key, aa, atomtype, calculate_shift(shifts)])
+    for (resid, atom, shift) in shifts:
+        aa = aatypes[resid]
+        if not atom in set(['H', 'N', 'CA', 'CB', 'C', 'HA', 'HA2', 'HA3', 'QA']):
+            continue # QUESTION:  is the carbonyl-oxygen named 'C' or 'CO'?
+        elif atom == 'H':
+            myShifts.append([resid, aa, 'HN', shift])
+        elif atom == 'QA':
+            myShifts.append([resid, aa, 'HA2', shift])
+            myShifts.append([resid, aa, 'HA3', shift])
+        else:
+            myShifts.append([resid, aa, atom, shift])
 #                print 'my shifts: ', myShifts[-1]
     return header + talos(myShifts)
