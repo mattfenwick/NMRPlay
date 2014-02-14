@@ -491,6 +491,10 @@ def getResidueShifts():
     return shifts
 
 
+def avg(vals):
+    return sum(vals) * 1.0 / len(vals)
+
+
 def selectOneShift(shifts):
     """
     if an atom shows up in multiple peaks, we want to combine those
@@ -505,26 +509,31 @@ def selectOneShift(shifts):
     return avg([u for (_3, _4, u) in shifts])
 
 
-def removeDuplicateAtoms(residues):
+def removeDuplicateAtoms(residue):
     """
     if we have both ambiguous-style -- QB -- and unambiguous-style
     -- HB[2]/HB[3] -- assignments for the same group of atoms, get
     rid of the QB shift b/c it has less information
     """
-    dupes = {'QB': ['HB2', 'HB3'],
-             'QG': ['HG2', 'HG3'],
-#             'QQG': ['QG1', 'QG2'],
-             'QD': ['HD2', 'HD3'],
-             'QQD': ['QD1', 'QD2']} # plus others
-    def per_residue(r):
-        new_residue = {}
-        for (atom, data) in r.items():
-            if dupes.has_key(atom) and all([k in r for k in dupes[atom]]):
-                pass
-            else:
-                new_residue[atom] = data
-        return new_residue
-    return model.fmap_dict(per_residue, residues)
+    dupes = {
+        'QA' : ['HA2' , 'HA3' ],
+        'QB' : ['HB2' , 'HB3' ],
+        'QG' : ['HG2' , 'HG3' ],
+        'QG1': ['HG12', 'HG13'],
+        'QQG': ['QG1' , 'QG2' ],
+        'QD' : ['HD2' , 'HD3' ],
+        'QQD': ['QD1' , 'QD2' ]
+    }
+    new_residue = {}
+    for (atom, data) in residue.items():
+        c1 = dupes.has_key(atom)
+        if c1:
+            c2 = all([k in residue for k in dupes[atom]])
+#            print atom, c1, c2
+            if c2:
+                continue
+        new_residue[atom] = data
+    return new_residue
 
 
 def disambiguateAtom(atomname):
@@ -534,13 +543,9 @@ def disambiguateAtom(atomname):
     so get rid of the ambiguity markers: e.g. `HB[2]` -> `HB2`
     """
     return filter(lambda x: x not in '[]', atomname)
-            
-
-def avg(vals):
-    return sum(vals) * 1.0 / len(vals)
 
 
-def selectBestShift():
+def checkShifts():
     shifts = getResidueShifts()
     best = {}
     for (resid, cs) in shifts.items():
@@ -554,6 +559,39 @@ def selectBestShift():
                 print resid, atom, mx, mn, av, vals
         best[resid] = residue
     return best
+
+
+def map_keys(f, d):
+    """not a real map operation since may be structure-changing => solution: throw exceptions!"""
+    out = {}
+    for (k, v) in d.items():
+        new_key = f(k)
+        if new_key in out:
+            raise ValueError('oops, duplicate new key %s %s' % (new_key, d))
+        out[new_key] = v
+    return out
+
+
+def manipulateShifts():
+    shifts = getResidueShifts()
+    one = model.fmap_dict(lambda s: model.fmap_dict(selectOneShift, s), shifts)
+    two = model.fmap_dict(lambda s: map_keys(disambiguateAtom, s), one)
+    three = model.fmap_dict(removeDuplicateAtoms, two)
+    return three
+
+
+def getShifts():
+    shifts = manipulateShifts()
+    def f1(x):
+        return x.items()
+    def f2(y):
+        resid, pairs = y
+        return [(resid, z[0], z[1]) for z in pairs]
+    def concat(xs):
+        return sum(xs, [])
+    lists = map(f2, model.fmap_dict(f1, shifts).items())
+    return concat(lists)
+
 
 
 def printXEasyShifts():

@@ -4,7 +4,7 @@ from . import querymodel
 from .bmrbshifts import stats
 from .algebra import ffilter, inner_join, groupBy, split, concatMap, fmap
 from operator import attrgetter
-from . import queries as q
+from . import queries as q # or, maybe -- from .queries import * ??
 
 
 ROOT = '../PPAbnormal/'
