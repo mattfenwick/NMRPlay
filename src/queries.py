@@ -472,8 +472,8 @@ def getResidueShifts():
             shifts[n][a] = []
         shifts[n][a].append(sh)
     for ss in proj.getSpinSystems():
-        if not 'backbone' in ss.tags:
-            print 'skipping -- not backbone -- ', ss.id, ss.tags
+        if ('backbone' not in ss.tags) and ('sidechain' not in ss.tags):
+            print 'skipping -- neither backbone nor sidechain -- ', ss.id, ss.tags
             continue
         if len(ss.residueids) == 0:
             print 'skipping -- no residue assignment -- ', ss.id
